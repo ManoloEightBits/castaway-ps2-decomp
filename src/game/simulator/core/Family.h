@@ -5,6 +5,12 @@
 
 class InventoryItems;
 
+// Wii: FamilyMember. Only the GUID that RunOnAddTree reads.
+class FamilyMember {
+public:
+    int mGUID; // 0x00  Wii: GetGUID
+};
+
 // Wii: Family, the interface FamilyImpl implements. Only the slots the decompiled code calls
 // have real signatures; the others are placeholders that keep them in place.
 class Family {
@@ -17,7 +23,7 @@ public:
     virtual void slot5();
     virtual void slot6();
     virtual int slot7(); // GenericSimCall 0x37 passes over a family while this is non-zero
-    virtual void slot8();
+    virtual FamilyMember *GetMember(int index); // slot 8, Wii GetMember
     virtual void slot9();
     virtual void slot10();
     virtual void slot11();

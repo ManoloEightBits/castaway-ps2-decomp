@@ -1,5 +1,8 @@
 #include "game/simulator/core/ObjectItem.h"
 
+#include "common/ReconBuffer.h"
+#include "game/simulator/core/Inventory.h"
+
 s16 ObjectItem::GetID() const
 {
     return 0;
@@ -135,4 +138,44 @@ void ObjectItem::AddAtribute(s16 value)
 void ObjectItem::ClearAttributes()
 {
     mAttributes.erase(mAttributes.begin(), mAttributes.end());
+}
+
+// Streams the GUID, the status byte and the attributes. Saves from before version 0x6D have no
+// owner fields, and before 0x71 a bool stood where the third one is.
+void ObjectItem::DoStream(ReconBuffer *buffer, int version)
+{
+    buffer->Recon32((int *)&field_0x8, 1);
+    buffer->Recon8(&field_0xc, 1);
+    s16 count = mAttributes.size();
+    buffer->Recon16(&count, 1);
+    for (int i = 0; i < count; i++) {
+        if (buffer->IsReading()) {
+            s16 value;
+            buffer->Recon16(&value, 1);
+            mAttributes.push_back(value);
+        } else {
+            buffer->Recon16(&mAttributes[i], 1);
+        }
+    }
+    if (version >= 0x6D) {
+        buffer->Recon16(&field_0xe, 1);
+        buffer->Recon16(&field_0x10, 1);
+    }
+    if (version < 0x71) {
+        bool unused;
+        buffer->ReconBool(&unused);
+        field_0x12 = 0;
+    } else {
+        buffer->Recon16(&field_0x12, 1);
+    }
+}
+
+cXObject *ObjectItem::MakeObject(Family *family, s16 a)
+{
+    return MakeObjectInline(family, a);
+}
+
+void ObjectItem::LoadItemInfo(cXObject *object, Family *family, s16 a)
+{
+    LoadItemInfoInline(object, family, a);
 }

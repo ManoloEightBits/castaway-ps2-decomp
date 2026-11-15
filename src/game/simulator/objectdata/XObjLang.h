@@ -122,7 +122,10 @@ public:
     u32 pad_0x454[0x9d];        // 0x454
     ERQuickdata *mDatabase;     // 0x6c8  Wii: GetObjectsDatabase()
 
-    ObjSelector *GetSelectorByGUID(int guid) { return mSelectors.findItem(guid); }
+    // The game has this both inline (SetToNext, TestObjectType) and as a function (0x254590,
+    // the item classes' MakeObject), so the inline body has its own name.
+    ObjSelector *GetSelectorByGUIDInline(int guid) { return mSelectors.findItem(guid); }
+    ObjSelector *GetSelectorByGUID(int guid);
 
     NamespaceSelector *GetNamespaceSelector(u32 namespaceID);
 };

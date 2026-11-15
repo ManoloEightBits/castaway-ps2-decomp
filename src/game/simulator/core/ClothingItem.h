@@ -5,6 +5,7 @@
 #include "game/simulator/core/InventoryItems.h"
 
 class Family;
+class ReconBuffer;
 class SimBodyPart;
 class cXObject;
 
@@ -23,6 +24,9 @@ public:
     s16 field_0xe;        // 0x0e
     u32 bodyPart;         // 0x10  a Character::eBodyPart
     u8 clothingSetIndex;  // 0x14
+    u8 field_0x15;        // 0x15  CopyFromSimBodyPart takes these from the part's bytes 0x1B to 0x1D
+    u8 field_0x16;        // 0x16
+    u8 field_0x17;        // 0x17
     int isMale;           // 0x18  a bool on Wii, a word here
     s32 isDamaged;        // 0x1c  0x20 bytes in all: InventoryItems::AddClothingItem allocates that
 
@@ -43,7 +47,7 @@ public:
     const InventoryTokens *GetToken();
     const IngredientToken *GetIngredientToken();
     void LoadItemInfo(cXObject *a, Family *b, s16 c);
-    int MakeObject(Family *a, s16 b);
+    cXObject *MakeObject(Family *a, s16 b);
     bool IsFood();
     bool IsFastFood();
     bool IsTool();
@@ -57,6 +61,7 @@ public:
     bool IsDye();
     void ClearAttributes();
     void SetupOwnershipInfo(cXObject *a);
+    void DoStream(ReconBuffer *buffer, int version);
 
     ClothingItem(s16 id, bool male);
     static s16 FindClothingItemID(const char *bodyPartName, const char *clothingSetName);

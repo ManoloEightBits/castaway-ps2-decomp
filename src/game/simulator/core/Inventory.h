@@ -8,6 +8,7 @@
 #include "game/simulator/core/ClothingItem.h"
 #include "game/simulator/core/InventoryItems.h"
 #include "game/simulator/core/Neighborhood.h"
+#include "game/simulator/core/ObjectModule.h"
 #include "game/simulator/core/OwnableItem.h"
 #include "game/simulator/core2/cXPerson.h"
 #include "game/simulator/objectdata/XObjLang.h"
@@ -293,6 +294,42 @@ inline int InventoryItems::AddOwnableItem(u32 guid)
         return 1;
     }
     return 0;
+}
+
+// Wii: RunOnRemoveTree. Runs the object's on-remove tree (entry point 0x1F) for the family's
+// first member, with the item's place as the parameter. Only ever inlined on PS2, in LoadItemInfo.
+inline void InventoryItems::RunOnRemoveTree(Family *family, cXObject *object, s16 index)
+{
+    FamilyMember *member = family->GetMember(0);
+    Neighbor *neighbor = GetNeighborhood()->FindNeighborByGUID(member->mGUID);
+    s16 param = index;
+    object->RunTree(kObjEntryOnRemove, neighbor->mID, &param);
+}
+
+// Wii: ObjectItem::MakeObject. A new out-of-world object of the item's GUID, with the item's
+// three words in the object's variables 0x29, 0xF and 0x27, marked as placed by the player, then
+// LoadItemInfo. OwnableItem::MakeObject contains this body, so it is inline here.
+inline cXObject *ObjectItem::MakeObjectInline(Family *family, s16 a)
+{
+    ObjSelector *selector = GetObjectFolder()->GetSelectorByGUID(GetGuid());
+    s16 id = GetObjectModule()->MakeNewOutOfWorldObject(selector, 0);
+    cXObject *object = GetObjectModule()->GetObjectFromID(id);
+    object->mVars.WriteVar(0x29, field_0xe);
+    object->mVars.WriteVar(0xF, field_0x10);
+    object->mVars.WriteVar(0x27, field_0x12);
+    object->SetWasPlacedByPlayer(true);
+    LoadItemInfo(object, family, a);
+    return object;
+}
+
+// Wii: ObjectItem::LoadItemInfo. The item's words into the object, then the on-remove tree.
+inline void ObjectItem::LoadItemInfoInline(cXObject *object, Family *family, s16 a)
+{
+    object->mVars.WriteVar(0x29, field_0xe);
+    object->mVars.WriteVar(0xF, field_0x10);
+    object->mVars.WriteVar(0x27, field_0x12);
+    object->SetWasPlacedByPlayer(true);
+    InventoryItems::RunOnRemoveTree(family, object, a);
 }
 
 #endif

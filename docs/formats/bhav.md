@@ -941,7 +941,7 @@ The result is true unless an operation below says otherwise.
 | Ownable by object (bit 7) | no | yes | no |
 
 - **A token GUID:** before the limit is checked, the object's GUID is looked up in the first word of each `InventoryTokens` row. If a row matches, one of that row's token (ID at `+0xC`) is added instead, and the add is true even when the inventory is full. GUID 0 is never a token.
-- **The on-add tree** runs with the family, the object and the new item's place (the last one). An add by GUID has no object, so it doesn't run.
+- **The on-add tree** runs with the family, the object and the new item's place (the last one). Proven, PS2 (`RunOnAddTree` `0x24E658` matches): it is the object's tree at entry point 0x1E, run for the family's first member's neighbour, with the place as the tree's one parameter. The on-remove tree is entry point 0x1F, run the same way when an item becomes an object again (`LoadItemInfo`). An add by GUID has no object, so it doesn't run.
 - **The add goals** (`0x1F9AC0`, Wii `CheckForAddGoals`) get the GUID and 0. They run after the on-add tree.
 
 **Tokens and clothing. Proven, PS2** (`AddTokenItem` `0x1F9608` and `AddClothingItem` `0x1F9DB8`, both match). Neither counts toward the 0x20 limit.
@@ -975,6 +975,8 @@ The result is true unless an operation below says otherwise.
 **The items.** The family's `InventoryItems` holds `InventoryItem`s of four kinds (the `+1` category above): object, ownable, token and clothing.
 - **Fields:** each has an instance ID, a count (1 for everything but tokens), attributes, an owner and a status byte.
 - **A token item** points at its `InventoryTokens` row (`TokenItem +0xC`, Wii `GetToken`).
+- **Making an object from an item** (`MakeObject`; proven, PS2, all four match): an object item or an ownable makes an out-of-world object of its GUID, copies its three stored words into the object's variables 0x29, 0xF and 0x27, marks it as placed by the player and runs the on-remove tree; an ownable also writes its owners back into the object's relationships as type 0, the ownership points. A token makes an object only if its row has flag 0x10 and a GUID and the count is above 0: the object gets variable 0x29 = 1, and the count goes down by one. Clothing makes nothing.
+- **Save format** (`DoStream`; proven, PS2, the three match): an object item streams its GUID (32 bits), its status byte, the attribute count and the attributes (16 bits each), then from save version 0x6D its words 0xE and 0x10, and from 0x71 word 0x12 (before that a bool stood there and is discarded). An ownable adds the owner count and (owner, points) pairs. A token streams its ID and count and finds its row again. A clothing item streams its ID, body part (one byte), set index, three style bytes, owner, hit points, the man's-piece flag and, from 0x7B, the damaged flag.
 - **Opcode 0x46:** Port's INVENTORY_ADD, REMOVE, FIND, COUNT and NON_TOKEN_COUNT are operations 0, 1, 2, 3 and 0xB in the table above.
 
 **`InventoryTokens` rows** (0x24 bytes, 214 on the disc). Proven, PS2 and disc:

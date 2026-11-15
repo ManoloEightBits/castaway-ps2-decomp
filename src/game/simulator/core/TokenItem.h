@@ -33,6 +33,7 @@ public:
     bool CanBePlanted();
     bool IsHandObject();
     bool IsDye();
+    cXObject *MakeObject(Family *family, s16 a);
 
     TokenItem(s16 id, s16 count);
 

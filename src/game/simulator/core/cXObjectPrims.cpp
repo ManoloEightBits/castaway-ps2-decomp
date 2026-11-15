@@ -1272,9 +1272,9 @@ long cXObject::TrySetToNext(StackElem *elem, XPrimParam *primParam)
         // Objects of one type, by position.
         ObjSelector *selector;
         if (param->GetGuidFromTemps())
-            selector = GetObjectFolder()->GetSelectorByGUID(mTemps[1] << 16 | (u16)mTemps[2]);
+            selector = GetObjectFolder()->GetSelectorByGUIDInline(mTemps[1] << 16 | (u16)mTemps[2]);
         else
-            selector = GetObjectFolder()->GetSelectorByGUID(param->mGUID);
+            selector = GetObjectFolder()->GetSelectorByGUIDInline(param->mGUID);
         int count = mModule->GetNumObjects();
         int id = *ref;
         int index = 0;
@@ -1506,7 +1506,7 @@ long cXObject::TryTestObjectType(StackElem *elem, XPrimParam *primParam)
         if (selector->GetGUID() == wanted)
             return 1;
     } else if (flags & 1) {
-        ObjSelector *other = GetObjectFolder()->GetSelectorByGUID(guid);
+        ObjSelector *other = GetObjectFolder()->GetSelectorByGUIDInline(guid);
         if (other) {
             if (selector->mSemiNamespaceID == other->mSemiNamespaceID)
                 return 1;
@@ -2766,8 +2766,6 @@ public:
     int GetIsMusicGenreEnabled(int genre);
 };
 
-// Wii: GetEORGlobals, a pointer on PS2 at 0x50A6A8.
-extern EGlobal *gEORGlobals;
 
 // GenericSimCall 0: Wii GetWeatherManager, a pointer on PS2 at 0x50A6A4.
 class WeatherManager {
@@ -3070,8 +3068,8 @@ long cXObject::TryGenericSimCall(StackElem *elem, XPrimParam *primParam)
         cXPerson *person = object->GetPerson();
         if (!person)
             return 0;
-        gEORGlobals->SetSelectedPerson(person);
-        if (person == gEORGlobals->mPlayerPerson)
+        Globs::pEORGlobals->SetSelectedPerson(person);
+        if (person == Globs::pEORGlobals->mPlayerPerson)
             return 1;
         return 0;
     }
@@ -3146,7 +3144,7 @@ long cXObject::TryGenericSimCall(StackElem *elem, XPrimParam *primParam)
         u16 source = elem->mStackObject;
         if (!source)
             break;
-        cXPerson *player = gEORGlobals->mPlayerPerson;
+        cXPerson *player = Globs::pEORGlobals->mPlayerPerson;
         if (!player)
             break;
         if (player->mESimPerson != mESimPerson)

@@ -140,3 +140,13 @@ int InventoryItems::AddOwnableItem(cXObject *object)
     }
     return 0;
 }
+
+// Runs the object's on-add tree (entry point 0x1E) for the family's first member, with the new
+// item's place as the parameter.
+void InventoryItems::RunOnAddTree(Family *family, cXObject *object, s16 index)
+{
+    FamilyMember *member = family->GetMember(0);
+    Neighbor *neighbor = GetNeighborhood()->FindNeighborByGUID(member->mGUID);
+    s16 param = index;
+    object->RunTree(kObjEntryOnAdd, neighbor->mID, &param);
+}

@@ -16,7 +16,12 @@ class cXObject;
 // before its own (0x4BB350), and that vtable keeps ObjectItem's functions in most slots.
 class OwnableItem : public ObjectItem {
 public:
-    u8 pad_0x24[0x10]; // 0x34 bytes in all: InventoryItems::AddOwnableItem allocates that
+    // Wii: OwnableItem::OwnerInfo, a Sim and its ownership points for this object.
+    struct OwnerInfo {
+        s16 mOwner;  // 0x00
+        s16 mPoints; // 0x02
+    };
+    eastl::vector<OwnerInfo, eastl::allocator> mOwners; // 0x24  0x34 bytes in all: AddOwnableItem allocates that
 
     OwnableItem(cXObject *object);
     OwnableItem(u32 guid); // 0x24F428: ObjectItem(guid), then its own vtable and zeroed fields
@@ -25,6 +30,10 @@ public:
     s16 GetOwnerID() const;
     int GetOwnershipPoints(s16 a) const;
     void SetupOwnershipInfo(cXObject *object);
+    void AddOwner(OwnerInfo &info); // 0x24F470
+    cXObject *MakeObject(Family *family, s16 a);
+    void LoadItemInfo(cXObject *object, Family *family, s16 a);
+    void DoStream(ReconBuffer *buffer, int version);
 };
 
 #endif
