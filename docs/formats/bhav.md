@@ -2680,15 +2680,15 @@ With no record, entry point 0 is global tree 0x10F, entry point 1 is global tree
 | 33 | `TryCallFunctionalTree`, `CheckForEvent` | Functional tree |
 | 34 | `NotifyBuildModeObjects` | Build mode |
 
-The purposes are read from the callers' names, so treat them as **likely**. 14, 16, 18 to 24, 28 and 29 have no caller by number. Some may be reached through a variable.
+The purposes are read from the callers' names, so treat them as **likely**, except 0, 2, 11, 12 and 32: `PostLoad`, `UserPlace`, `UserPickup` and `ApplyDamage` match byte for byte on PS2 (2026-11-15), and 30 and 31 were proven with the inventory. `UserPlace` and `UserPickup` run 11 and 12 on a single-tile object and then on every object in its slots; a multi-tile object leaves that to its parts. `ApplyDamage` runs 32 only for a positive total, with parameter 0 set to it: each damage type whose armour is under 255 times the scale adds its amount less the armour, and the total never goes below zero. 14, 16, 18 to 24, 28 and 29 have no caller by number. Some may be reached through a variable.
 
 ### How an object starts running
 
-**Proven for `PostLoad`, read on both builds, and likely for the rest.** Loading a lot:
+**Proven for `PostLoad`, which matches on PS2, and likely for the rest.** Loading a lot:
 
 1. `ObjectModule::DoStream` makes each object, runs `Initialize`, and reads its saved state over the top.
 2. `cXObject::PostLoad` sets its location.
-3. If its selector needs a reset, it runs `CleanupPeople`, `Cleanup(0)` and then the init tree, entry point 0.
+3. If its selector needs a reset, or is the object folder's placeholder selector, it runs `CleanupPeople` and `Cleanup(0)`; a reset then also runs the init tree, entry point 0.
 4. Unless the game is in author mode, it runs the load tree, entry point 2, with parameter 0 set to the transition type.
 5. Its main tree carries on from the stack.
 

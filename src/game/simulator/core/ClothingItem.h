@@ -62,6 +62,10 @@ public:
     void ClearAttributes();
     void SetupOwnershipInfo(cXObject *a);
     void DoStream(ReconBuffer *buffer, int version);
+    bool IsDyable();
+    // Wii keeps these two as functions; PS2 inlines them into IsDyable. In ClothingItem.cpp.
+    inline class BodyPartTypeInfo *GetBodyPartTypeInfo() const;
+    inline Sim::BodyPartGeometryTSC6 *GetClothingSetData() const;
 
     ClothingItem(s16 id, bool male);
     static s16 FindClothingItemID(const char *bodyPartName, const char *clothingSetName);

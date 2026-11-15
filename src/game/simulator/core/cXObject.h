@@ -10,6 +10,7 @@
 #include "game/simulator/core/Neighborhood.h"
 #include "game/simulator/core/ObjectModule.h"
 #include "game/simulator/core2/TreeSim.h"
+#include "game/Weather.h"
 
 class FTileRect;
 class AnimateNewParam;
@@ -20,16 +21,20 @@ class ObjSelector;
 class ReconBuffer;
 class RelMatrix;
 
-namespace Weather {
-class DamageEvent;
-class Armor;
-}
 
 class CTilePt;
 
-// Wii: ObjEntryPoint, the index of a tree in an object's entry-point table. Only the two the
-// inventory runs are known; the names are ours.
-enum ObjEntryPoint { kObjEntryOnAdd = 0x1e, kObjEntryOnRemove = 0x1f };
+// Wii: ObjEntryPoint, the index of a tree in an object's entry-point table. The first four
+// are The Sims 2's function-table order; the names are ours, from the callers.
+enum ObjEntryPoint {
+    kObjEntryInit = 0,           // PostLoad, when the selector needs a reset
+    kObjEntryLoad = 2,           // PostLoad, with the transition type as the parameter
+    kObjEntryUserPlacement = 0xb, // UserPlace
+    kObjEntryUserPickup = 0xc,   // UserPickup
+    kObjEntryOnAdd = 0x1e,       // the inventory
+    kObjEntryOnRemove = 0x1f,
+    kObjEntryApplyDamage = 0x20  // ApplyDamage, with the damage as the parameter
+};
 
 // Wii: FTilePt, a tile position: x and y, two FInts with four bits of fraction.
 class FTilePt {
@@ -322,9 +327,9 @@ public:
     virtual void Place(const FTilePt &tile, int a, cXObject *object, int b);
     virtual int IsPartOfMe(cXObject *object);
     virtual int UserCanPlace(const FTilePt &tile, int a, cXObject *object, int b);
-    virtual int UserPlace(const FTilePt &tile, int a, cXObject *object, int b);
+    virtual void UserPlace(const FTilePt &tile, int a, cXObject *object, int b);
     virtual int UserCanPickup();
-    virtual int UserPickup(bool a);
+    virtual void UserPickup(bool a);
     virtual int UserCanDelete();
     virtual void ComputeRect(const FTilePt &tile, FTileRect *rect);
     virtual void ForceLocation();
@@ -355,7 +360,11 @@ public:
             portal = true;
         return portal;
     }
-    bool IsPerson() const { return GetType() == 2; }
+    // The game has this inlined and as a function (0x254090, which UserCanPickup calls).
+    bool IsPersonInline() const { return GetType() == 2; }
+    bool IsPerson() const;
+    // Wii: IsOccupied, bit 5 of variable 8. Inlined into UserCanPickup.
+    int IsOccupied() const { return ((u16)mVars[8] >> 5) & 1; }
     bool IsMultiTile() const { return mDef[0xa] != 0; }
     bool IsInWorld() const
     {
@@ -379,16 +388,31 @@ public:
     int GetNumRoutingSlots() { return mRoutingSlots.size(); }
     RoutingSlot *GetRoutingSlot(int index) { return &mRoutingSlots[index]; }
     FTilePt &GetLocationRef() { return *(FTilePt *)&mTileX; }
-    int CountObjectSlots() { return mObjectSlots.size() - 1; }
-    ObjectSlot *GetObjectSlot(int index)
+    // Wii keeps this as a function; PS2 inlines it, and its two calls go to the out-of-line
+    // copies of GetObjectSlot and GetObjectFromID (0x2537D0 and 0x2457B0) that the game has
+    // beside the inlined ones. GCC 2.95 compiles a body in the order it meets them and
+    // cannot inline a function it has not compiled yet, so this one is defined here while
+    // those two are only declared and get their inline bodies after the class.
+    cXObject *GetContainedObject(int index)
     {
-        if (index < 0 || index >= CountObjectSlots())
-            return 0;
-        return &mObjectSlots[index + 1];
+        ObjectSlot *slot = GetObjectSlot(index);
+        if (slot != 0)
+            return GetObjectFromID(slot->mObjectID);
+        return 0;
     }
-    cXObject *GetObjectFromID(s16 id) { return mModule->GetObjectFromID(id); }
+    int CountObjectSlots() { return mObjectSlots.size() - 1; }
+    inline ObjectSlot *GetObjectSlot(int index);
+    inline cXObject *GetObjectFromID(s16 id);
     s16 *GetDef() { return mDef; }
     int RunTree(ObjEntryPoint entry, s16 a, s16 *param); // 0x253FD8
+    // Wii: GetTreeID. The tree at an entry point, or 0. Defined in cXObject.cpp.
+    inline int GetTreeID(ObjEntryPoint entry);
+    // RunTree's body: ApplyDamage has it inlined while UserPickup, UserPlace and PostLoad call
+    // the function, so the inline copy has its own name. Defined in cXObject.cpp.
+    inline int RunTreeInline(ObjEntryPoint entry, s16 a, s16 *param);
+    void SetLevel(int level);                            // 0x253EC8
+    void SetLocation(const FTilePt &tile, int level);    // 0x212400
+    void UpdateSimFlags();                               // 0x253DC0
     void SetWasPlacedByPlayer(bool placed);               // 0x253C98
     int CanPlaceSingleTile(const FTilePt &tile, int a, cXObject *object, int b); // 0x253958
 
@@ -413,6 +437,19 @@ public:
     long TryMakeActionString(StackElem *, XPrimParam *);
     long TryGenericSimCall(StackElem *, XPrimParam *);
     f32 CalcShortDistance(cXObject *object) const;
+    // The object in variable 0x1a, the one this is in. Wii: HierGetParent.
+    cXObject *HierGetParent(); // 0x253640
+    // Wii keeps this as a function; PS2 inlines it: none when variable 0xe is set.
+    cXObject *GetPrevObjectSibling()
+    {
+        if (mVars[0xe] == 0)
+            return HierGetParent();
+        return 0;
+    }
+    // The container of the first object in this one's chain of previous siblings. The game
+    // has it as a function (0x253730) and inlined in UserCanPickup. Defined after the class,
+    // so that its GetObjectFromID is the inlined one.
+    inline cXObject *GetContainerInline();
     cXObject *GetContainer();
     long ShowAllObjectDialogs(StackElem *elem, XPrimParam *param);
     static void ChangeSelectedSimL();
@@ -468,6 +505,26 @@ public:
 
 // Whether this object can sleep through an Idle: it isn't a Sim, variable 0x19 is clear, and
 // none of its sprites is active.
+inline ObjectSlot *cXObject::GetObjectSlot(int index)
+{
+    if (index < 0 || index >= CountObjectSlots())
+        return 0;
+    return &mObjectSlots[index + 1];
+}
+
+inline cXObject *cXObject::GetObjectFromID(s16 id)
+{
+    return mModule->GetObjectFromID(id);
+}
+
+inline cXObject *cXObject::GetContainerInline()
+{
+    cXObject *object = this;
+    while (object->GetPrevObjectSibling() != 0)
+        object = object->GetPrevObjectSibling();
+    return GetObjectFromID(object->mVars[0x1a]);
+}
+
 inline bool cXObject::AllowIdleOptimization()
 {
     bool active = false;

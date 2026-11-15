@@ -9,6 +9,7 @@
 #include "common/TRect.h"
 #include "common/Vector.h"
 #include "common/types.h"
+#include "game/Weather.h"
 
 class CasSimDescription;
 class ClothingItem;
@@ -16,15 +17,6 @@ class ReconBuffer;
 class SimModelTSC6;
 
 
-namespace Weather {
-enum eDamageType { DAMAGE_TYPE_COUNT = 3 };
-// Wii: Weather::DamageEvent. One amount per damage type for the clothes, and one for the
-// skin. Nothing else is known.
-struct DamageEvent {
-    s16 amounts[DAMAGE_TYPE_COUNT]; // 0x00
-    s16 skinAmount;                 // 0x06
-};
-}
 
 namespace Sim {
 

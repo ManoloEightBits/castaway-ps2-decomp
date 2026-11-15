@@ -60,8 +60,11 @@ public:
         return data;
     }
 
-    // Also inlined on PS2. The first row of the table, or null when it has none.
-    static const CasSimTypeInfo *GetBodyPartTypeInfoTable()
+    // The first row of the table, or null when it has none. The game has this inlined and as
+    // a function (0x143B20, called by ClothingItem::GetBodyPartTypeInfo), so the inline body
+    // has its own name; the function is in CasUtils.cpp.
+    static const CasSimTypeInfo *GetBodyPartTypeInfoTable();
+    static const CasSimTypeInfo *GetBodyPartTypeInfoTableInline()
     {
         const ERQTable *table = GetQuickdata()->GetTable("Sim::BodyPartTypeInfoTableTSC6");
         if (table == 0 || table->count == 0)
@@ -107,8 +110,9 @@ public:
         return use;
     }
 
-    // The PS2 build inlines this into its callers; the Wii build keeps it as a function.
-    static u8 GetBodyPartIndex(Character::eBodyPart part)
+    // Inlined into its callers, and also a function (0x143B90) for ClothingItem's inlines.
+    static u8 GetBodyPartIndex(Character::eBodyPart part);
+    static u8 GetBodyPartIndexInline(Character::eBodyPart part)
     {
         int index = part - 0x1a;
         if (index >= 0 && index < 15)
@@ -118,9 +122,10 @@ public:
         return 14;
     }
 
-    // Also inlined on PS2. 0x27 is the sleeves, which share the torso's database index;
-    // 0x7f means the part has none.
-    static u8 GetBodyPartDBIndex(Character::eBodyPart part)
+    // 0x27 is the sleeves, which share the torso's database index; 0x7f means the part has
+    // none. Inlined into its callers, and also a function (0x143BD8) for GetClothingSetData.
+    static u8 GetBodyPartDBIndex(Character::eBodyPart part);
+    static u8 GetBodyPartDBIndexInline(Character::eBodyPart part)
     {
         int index = part - 0x1a;
         if (index >= 0 && index < 13)
@@ -136,6 +141,18 @@ public:
             return 4;
         return 0x7f;
     }
+
+    // Wii: GetBodyData. The "Sim::SimPartsTSC6" row for one sex. The PS2 build inlines it
+    // into GetClothingSetData, and takes the flag as a word.
+    static const CasSimTextureInfo *GetBodyData(int male)
+    {
+        ERQuickdata *data = GetQuickdata();
+        const ERQTable *table = data->GetTable("Sim::SimPartsTSC6");
+        return (const CasSimTextureInfo *)data->GetRow(table, male ? "male" : "female");
+    }
+    // One clothing set of one body part, or null. 0x129D30.
+    static Sim::BodyPartGeometryTSC6 *GetClothingSetData(int male, Character::eBodyPart part,
+                                                         u8 setIndex);
 };
 
 #endif

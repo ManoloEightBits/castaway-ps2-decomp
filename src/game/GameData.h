@@ -68,12 +68,14 @@ public:
     u32 pad_0xa0[2];
     int mInitialSimSelection; // 0xa8
     int mSelectedFamily;      // 0xac  Wii: GetSelectedFamily
-    u32 pad_0xb0[5];
+    u32 pad_0xb0[4];
+    int mAuthorMode;          // 0xc0  Wii: IsAuthorMode
     int mBuildBuyMode;        // 0xc4  Wii: IsBuildBuyMode
     Player mPlayer;           // 0xc8
 
     Player *GetPlayer() { return &mPlayer; }
     int GetSelectedFamily() const { return mSelectedFamily; }
+    int IsAuthorMode() const { return mAuthorMode; }
     void SetInitialSimSelection(int id) { mInitialSimSelection = id; }
 };
 extern GameData _gd;

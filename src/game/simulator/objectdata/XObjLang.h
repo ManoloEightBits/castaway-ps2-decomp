@@ -128,6 +128,7 @@ public:
     ObjSelector *GetSelectorByGUID(int guid);
 
     NamespaceSelector *GetNamespaceSelector(u32 namespaceID);
+    ObjSelector *GetPlaceholder(); // 0x254AF8  Wii's name; PS2 by cXObject::PostLoad
 };
 
 extern ObjectFolder *gObjectFolder;

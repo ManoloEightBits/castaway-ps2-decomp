@@ -433,7 +433,7 @@ bool CasSimDescription::GetValidClothingSetIndexes(
     Character::eBodyPart part, eastl::vector<Sim::ClothingSetIndexInfo, eastl::allocator> &indexes)
 {
     indexes.clear();
-    u8 index = CasUtils::GetBodyPartDBIndex(part);
+    u8 index = CasUtils::GetBodyPartDBIndexInline(part);
     if (index == 0x7f)
         return false;
     return bodyParts[index]->GetValidClothingSetIndexes(indexes);
@@ -497,7 +497,7 @@ bool CasSimDescription::ChangeToCostume(const char *name)
         return false;
     const VECTOR<char *> *names = GetFlag(0) ? &costume->flagSetNames : &costume->flagClearNames;
     for (u8 part = 0x1a; part <= 0x26; part++) {
-        u8 index = CasUtils::GetBodyPartIndex((Character::eBodyPart)part);
+        u8 index = CasUtils::GetBodyPartIndexInline((Character::eBodyPart)part);
         if (strlen((*names)[index]) != 0) {
             u8 setIndex = CasUtils::GetClothingSetIndexByName(GetFlag(0), (Character::eBodyPart)part,
                                                               (*names)[index]);
@@ -521,12 +521,12 @@ u8 CasSimDescription::GetNumBodyParts() const
 
 u8 CasSimDescription::GetBodyPartIndex(Character::eBodyPart part) const
 {
-    return CasUtils::GetBodyPartIndex(part);
+    return CasUtils::GetBodyPartIndexInline(part);
 }
 
 u8 CasSimDescription::GetClothingSetUIIndex(Character::eBodyPart part) const
 {
-    u8 index = CasUtils::GetBodyPartDBIndex(part);
+    u8 index = CasUtils::GetBodyPartDBIndexInline(part);
     if (index == 0x7f)
         return 0;
     return bodyParts[index]->GetClothingSetUIIndex();

@@ -89,7 +89,10 @@ public:
     virtual void StackJustPopped();
     virtual int HandleBreakpoint(StackElem *elem, BehaviorNode *node);
     // Runs a tree to its end in one go. Returns 1 if it returned true, 0 if false or on error.
-    virtual int RunCheckTree(Behavior *behavior, s16 stackObject, s16 treeID, s16 *params);
+    // The tree ID is an int here where the Wii's is a short: cXObject::RunTree and the copy
+    // ApplyDamage inlines pass HasFunction's int result without narrowing it, which this
+    // compiler always does for a short parameter. The body still treats it as a short.
+    virtual int RunCheckTree(Behavior *behavior, s16 stackObject, int treeID, s16 *params);
     virtual void Initialize(int stackSize, s16 *defaultParams);
     virtual int Simulate(int a);
     virtual StackElem *GetHighLevelAction();

@@ -70,7 +70,7 @@ struct CasSimTypeInfo {
 
 // No known Wii name; this name is ours.
 struct CasSimTextureInfo {
-    u8 field_0x0[0x34];                                                         // 0x00
+    VECTOR<Sim::BodyPartGeometryTSC6> parts[13];                                // 0x00  one list of clothing sets per body part database index (CasUtils::GetClothingSetData)
     VECTOR<Sim::BodyPartTextureTSC6> tattooTextures[Sim::TATTOO_LOCATION_COUNT]; // 0x34
     VECTOR<Sim::BodyPartSkinTSC6> skins;                                        // 0x44  one per skin colour
 };
