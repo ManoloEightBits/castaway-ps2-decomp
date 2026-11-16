@@ -5,12 +5,41 @@
 #include "game/simulator/core/Neighborhood.h"
 #include "game/simulator/core/ObjectModule.h"
 #include "game/simulator/core/FixedWorld.h"
+#include "game/simulator/core/Lot.h"
+#include "game/simulator/core/cXMTObject.h"
+#include "game/simulator/core2/cXPerson.h"
 #include "game/simulator/core/ObjSelector.h"
 #include "game/simulator/objectdata/XObjLang.h"
+
+// UserCanPlace's placement check is inside a do { } while (0), so the original had a macro
+// of this shape there: references inside one weigh extra in register priority, which is
+// what puts this in s4 ahead of the condition flag. A plain if leaves this in s5 and the
+// flag in s4, 13 words off.
+#define RETURN_IF_CANT_PLACE(tile, level, object, slot)                \
+    do {                                                        \
+        if (!CanPlaceSingleTileInline(tile, level, object, slot))      \
+            return 0;                                           \
+    } while (0)
 
 inline int cXObject::GetTreeID(ObjEntryPoint entry)
 {
     return mSelector->GetFnTable()->HasFunction(entry);
+}
+
+inline bool cXObject::IsChair()
+{
+    return GetTreeID(kObjEntryChair) != 0;
+}
+
+// The object on a tile gets its facing updated, when the tile is on the grid.
+inline void cXObject::UpdateChairFacing(ObjectModule *module, int x, int y, int level)
+{
+    CTilePt tile(x, y, level);
+    if (!GetFixedWorld()->OutOfBounds(tile)) {
+        cXObject *object = module->GetObjectFromID(module->GetTileObjectID(tile));
+        if (object != 0)
+            object->UpdateChairFacing();
+    }
 }
 
 inline int cXObject::RunTreeInline(ObjEntryPoint entry, s16 a, s16 *param)
@@ -19,6 +48,12 @@ inline int cXObject::RunTreeInline(ObjEntryPoint entry, s16 a, s16 *param)
     if (tree != 0)
         return RunCheckTree(mSelector->mBehavior, a, tree, param);
     return 0;
+}
+
+inline int cXObject::CanPlaceSingleTileInline(const FTilePt &tile, int level, cXObject *object, int slot)
+{
+    PlacementSpec spec(tile, level, object, slot);
+    return TestPlace(&spec);
 }
 
 // Runs the tree at an entry point to its end, with `a` as the stack object. 0 when the
@@ -170,9 +205,9 @@ int cXObject::IsInteractionTile(bool inWorldOnly)
     return result;
 }
 
-int cXObject::CanPlace(const FTilePt &tile, int a, cXObject *object, int b)
+int cXObject::CanPlace(const FTilePt &tile, int level, cXObject *object, int slot)
 {
-    return CanPlaceSingleTile(tile, a, object, b);
+    return CanPlaceSingleTile(tile, level, object, slot);
 }
 
 // Flags the transition in the EOR globals by type: 2 goes to the main menu, 3 clears
@@ -233,9 +268,9 @@ void cXObject::UserPickup(bool a)
 }
 
 // Placed, then the user-placement trees run the same way UserPickup runs the pickup ones.
-void cXObject::UserPlace(const FTilePt &tile, int a, cXObject *object, int b)
+void cXObject::UserPlace(const FTilePt &tile, int level, cXObject *object, int slot)
 {
-    Place(tile, a, object, b);
+    Place(tile, level, object, slot);
     if (!IsMultiTile()) {
         RunTree(kObjEntryUserPlacement, 0, 0);
         int count = CountObjectSlots();
@@ -359,3 +394,235 @@ int cXObject::UserCanPickup()
     }
     return 1;
 }
+
+// The tile is the one given unless the object goes into a slot of another object that is not
+// a TS2 slot, when it is that object's own location.
+PlacementSpec::PlacementSpec(const FTilePt &tile, int level, cXObject *object, int slot)
+{
+    mValid = 1;
+    mTile = tile;
+    if (object != 0) {
+        ObjectSlot *objectSlot = object->GetObjectSlot(slot);
+        if (objectSlot != 0 && !objectSlot->IsTS2ObjectSlot())
+            mTile = object->GetLocationRef();
+    }
+    // Wii's order of the three stores; the scheduler puts the param store first either way,
+    // but slot before object is what keeps -1 out of v0.
+    mObject = object;
+    mSlot = object != 0 ? slot : -1;
+    mLevel = level;
+}
+
+int cXObject::CanPlaceSingleTile(const FTilePt &tile, int level, cXObject *object, int slot)
+{
+    return CanPlaceSingleTileInline(tile, level, object, slot);
+}
+
+// Whether the user may put the object at the tile, with the reason in gPlacementError when
+// not: 1 the tile is off the grid or may not be edited, 0xB the slot it would go into has a
+// height of 5 to 7. The tile must be a tile centre (both fractions 8) and TestPlace must
+// agree, which set no code. The globals flag that lets UserCanDelete delete anything skips
+// the slot check here.
+int cXObject::UserCanPlace(const FTilePt &tile, int level, cXObject *object, int slot)
+{
+    gPlacementError = 0;
+    gPlacementConflict = 0;
+    if (GetFixedWorld()->OutOfBounds(CTilePt(tile, 1)) || !GetFixedWorld()->MayEditTile(CTilePt(tile, 1))) {
+        gPlacementError = 1;
+        return 0;
+    }
+    RETURN_IF_CANT_PLACE(tile, level, object, slot);
+    if (tile.FracX() != 8 || tile.FracY() != 8)
+        return 0;
+    if (Globs::pEORGlobals->field_0x414)
+        return 1;
+    if (object != 0) {
+        ObjectSlot *objectSlot = object->GetObjectSlot(slot);
+        if (objectSlot != 0) {
+            // Nested: && on one variable folds to a single unsigned range compare.
+            int height = objectSlot->GetHeight();
+            if (height < 8) {
+                if (height >= 5) {
+                    gPlacementError = 0xb;
+                    return 0;
+                }
+            }
+        }
+    }
+    return 1;
+}
+
+bool cXObject::IsVehicle()
+{
+    return GetType() == 12;
+}
+
+HierarchySite::HierarchySite(const PlacementSpec *spec)
+{
+    mValid = spec->mValid;
+    mSlot = spec->mSlot;
+    if (mSlot != -1)
+        mSlot = mSlot + 1;
+    mTile = spec->mTile;
+    mLevel = spec->mLevel;
+    mObject = spec->mObject;
+}
+
+HierarchySite::HierarchySite(cXObject *object, const FTilePt &tile, int slot)
+{
+    mObject = object;
+    mSlot = slot;
+    mTile = tile;
+    mLevel = mObject->mLevel;
+    mValid = 1;
+}
+
+// GetCTilePt's body again (cXObjectPrims.cpp has the first), here so that
+// CalcArmorAgainstDamage inlines it, as the game does. It must come after UserCanPickup,
+// which calls the game's copy at 0x253ED0: a function compiled before an inline's body has
+// been seen calls it out of line.
+inline CTilePt cXObject::GetCTilePt() const
+{
+    return CTilePt(mTileX >> 4, mTileY >> 4, mLevel);
+}
+
+// How much of a damage event the object's surroundings absorb. A roof absorbs nothing. A wall
+// or portal is sheltered when both of its parts are in a room; anything else takes its room's
+// two flags, and without a roofed room looks for a roof on its tile. Walls and a roof together
+// absorb damage types 0 and 1 and the skin amount; walls alone half of type 0; a roof alone
+// type 1 and the skin amount.
+void cXObject::CalcArmorAgainstDamage(const Weather::DamageEvent &event, Weather::Armor &armor)
+{
+    int walled = 0;
+    int roofed = 0;
+    if (!IsRoof()) {
+        if (IsStructure() || IsPortal()) {
+            cXMTObject *first = GetMTObject()->GetFirstMultiTileObject();
+            walled = first->GetData(0x1d) != 0;
+            if (walled > 0) {
+                if (first->GetNextMultiTileObject()->GetData(0x1d) == 0)
+                    walled = 0;
+            }
+        } else {
+            Room *room = GetRoomManager()->GetRoom(GetRoom());
+            if (room != 0) {
+                walled = room->mEnclosed;
+                roofed = room->mRoofed;
+            }
+            if (roofed == 0) {
+                CTilePt tile = GetCTilePt();
+                if (!GetFixedWorld()->OutOfBounds(tile) && GetFixedWorld()->HasRoof(tile))
+                    roofed = 1;
+            }
+        }
+    }
+    for (int i = Weather::DAMAGE_TYPE_COUNT; i >= 0; i--)
+        armor.values[i] = 0;
+    if (walled > 0) {
+        if (roofed > 0) {
+            armor.values[0] = event.amounts[0];
+            armor.values[1] = event.amounts[1];
+            armor.values[3] = event.skinAmount;
+        } else {
+            armor.values[0] = event.amounts[0] / 2;
+        }
+    } else if (roofed > 0) {
+        armor.values[1] = event.amounts[1];
+        armor.values[3] = event.skinAmount;
+    }
+}
+
+// Variable 7, the object's impact on its room's score, from the definition's style value:
+// halved for a wall, portal or roof, nothing for a Sim, a quarter more for definition word
+// 0x45 equal to 9, rounded to the nearest. Only when variable 7 is still 0, and only for the
+// lead part of a multi-tile object.
+void cXObject::CalcRoomScoreImpact()
+{
+    if (IsMultiTile()) {
+        if (!GetMTObject()->IsLeadObject())
+            return;
+    }
+    if (GetData(7) != 0)
+        return;
+    f32 score = GetStyle();
+    if (IsStructure() || IsPortal() || IsRoof()) {
+        score *= 0.5f;
+    } else if (IsPersonInline()) {
+        score = 0.0f;
+    } else if (mDef[0x45] == 9) {
+        score *= 1.25f;
+    }
+    SetData(7, (s16)(int)(score + 0.5f));
+}
+
+// The footprint: a square of half the tile width around the tile, then shrunk on each side by
+// a nibble of definition word 0x4d (less a Sim's person data 0x21 when variable 1's low bit is
+// clear), the four nibbles turned by the object's direction in variable 1. Both builds call
+// GetTileWidth twice and read variable 1 three times for one use; the first reads are
+// kept here for the bytes, their shape in the original unknown.
+void cXObject::ComputeRect(const FTilePt &tile, FTileRect *rect)
+{
+    s16 personOffsets = 0;
+    GetTileWidth();
+    int half = GetTileWidth() / 2;
+    rect->SetWhole(tile.mX - half, tile.mY - half, tile.mX + half, tile.mY + half);
+    s16 offsets = mDef[0x4d];
+    if (GetType() == 2) {
+        cXPerson *person = GetPerson();
+        // GetData's s16 value, not the reference: the reference is loaded unsigned and tested
+        // with xori.
+        if ((GetData(1) & 1) == 0)
+            personOffsets = person->GetPersonData(0x21);
+    }
+    if (offsets != 0 || personOffsets != 0) {
+        int edges[4];
+        edges[0] = offsets & 0xf;
+        edges[1] = (offsets >> 4) & 0xf;
+        edges[2] = (offsets >> 8) & 0xf;
+        edges[3] = (offsets >> 12) & 0xf;
+        if (personOffsets != 0) {
+            edges[0] -= personOffsets & 0xf;
+            edges[1] -= (personOffsets >> 4) & 0xf;
+            edges[2] -= (personOffsets >> 8) & 0xf;
+            edges[3] -= (personOffsets >> 12) & 0xf;
+        }
+        mVars[1];
+        mVars[1];
+        s16 direction = mVars[1] % 8;
+        int turn = (8 - direction) / 2;
+        rect->mMinY += edges[turn % 4];
+        rect->mMaxX -= edges[(turn + 1) % 4];
+        rect->mMaxY -= edges[(turn + 2) % 4];
+        rect->mMinX += edges[(turn + 3) % 4];
+    }
+}
+
+#ifdef NON_MATCHING
+// 51 of 186 words by the aligned diff, every one a register name: the game holds the old
+// direction in s2 and this and the variable set's address in s3 and s4, this compiler the
+// other way round (s2, s3, s4). The instructions are the game's otherwise. Tried: the old
+// direction as s16 and as int, read through mVars[1] and through GetData(1), copied into a
+// second local before the lookup, the table lookups through an inline taking the direction
+// (which reads variable 1 once where the game reads it twice), the table term on the left of
+// the adds as the Wii has it for the first call (70 words) and for both (a shorter function),
+// and the chair block inside a do { } while (0).
+// Turns the object by amount steps of variable 0x17 (0 means it can't turn), keeping variable 1
+// to eight directions. A chair tells the objects a step away in its old and new directions,
+// which is what UpdateChairFacing does for them.
+void cXObject::Turn(int amount)
+{
+    if (amount == 0)
+        return;
+    if (GetData(0x17) == 0)
+        return;
+    s16 oldDirection = mVars[1];
+    SetData(1, (GetData(1) + GetData(0x17) * amount) & 7);
+    if (IsChair()) {
+        UpdateChairFacing(mModule, (mTileX >> 4) + sXDirTable[oldDirection],
+                          (mTileY >> 4) + sYDirTable[oldDirection], mLevel);
+        UpdateChairFacing(mModule, (mTileX >> 4) + sXDirTable[GetData(1)],
+                          (mTileY >> 4) + sYDirTable[GetData(1)], mLevel);
+    }
+    UpdateWallAdjacency();
+}
+#endif

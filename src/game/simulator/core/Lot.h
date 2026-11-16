@@ -6,7 +6,11 @@
 // Wii: Room and RoomManager. Only what InterpValue reads.
 class Room {
 public:
-    u8 pad_0x0[0x84];
+    // Read by cXObject::CalcArmorAgainstDamage: an enclosed room shelters from damage type 0
+    // (half of it without a roof), a roofed one from type 1 and the skin amount.
+    int mEnclosed;   // 0x00
+    int mRoofed;     // 0x04
+    u8 pad_0x8[0x7c];
     f32 mBasicScore; // 0x84  Wii: BasicScore(), inlined here
 
     int IsOutside();
@@ -21,7 +25,7 @@ public:
 
     static RoomManager *sRoomMgr;
 
-    Room *GetRoom(u16 id);
+    Room *GetRoom(u16 id);     // 0x1DFEA0
     void RoomScoreChanged(int id);
 
     f32 GetRoomEnvironmentScore(u16 id)
@@ -35,6 +39,11 @@ public:
         return 0.0f;
     }
 };
+
+// Wii: GetRoomManager, a function. PS2 keeps the manager in a global next to gFixedWorld
+// and pEORGlobals; InterpValue reads the static sRoomMgr instead.
+extern RoomManager *gRoomManager; // 0x50A698
+inline RoomManager *GetRoomManager() { return gRoomManager; }
 
 // Wii: cSimulator. Reached through a global on PS2.
 class cSimulator {
