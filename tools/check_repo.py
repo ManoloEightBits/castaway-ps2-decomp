@@ -19,6 +19,10 @@ FORBIDDEN_NAMES = re.compile(
 
 MAGIC = {b'\x7fELF': 'an ELF executable or object', b'MZ': 'a Windows executable'}
 
+# pkg/DecompileFunctions.java stamps every draft it writes with this line at the start of
+# a line. The scripts and docs that mention it do so indented or inside a string, so they pass.
+DECOMPILER_OUTPUT = re.compile(rb'^// Ghidra decompiler output', re.MULTILINE)
+
 SECRETS = [
     (re.compile(rb'-----BEGIN [A-Z ]*PRIVATE KEY-----'), 'a private key'),
     (re.compile(rb'\bgh[pousr]_[A-Za-z0-9]{36,}\b'), 'a GitHub token'),
@@ -44,6 +48,8 @@ def problems_in(path, data):
     # match.py writes game text into this column; publish_names.py strips it.
     if path.endswith('.csv') and b'example_strings' in data.split(b'\n', 1)[0]:
         yield 'has an example_strings column; run pkg/tools/publish_names.py first'
+    if DECOMPILER_OUTPUT.search(data):
+        yield 'is Ghidra decompiler output, which is derived from the executable'
     for pattern, what in SECRETS:
         if pattern.search(data):
             yield 'contains what looks like ' + what

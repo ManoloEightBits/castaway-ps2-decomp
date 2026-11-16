@@ -41,7 +41,8 @@ tool instead of running it. Keep it that narrow: a new difference gets its own e
 
 - The game executable, disc images, or any extracted model, texture, audio or text.
 - The compilers. They are proprietary.
-- Ghidra projects. They embed the executable.
+- Ghidra projects. They embed the executable. The same goes for decompiler output from
+  `pkg/tools/gdec.py`, which `check_repo.py` recognises by its header line.
 - `wii_function_reference.csv`, and any CSV that still has the `example_strings` column.
   Run `pkg/tools/publish_names.py` before copying a names CSV into the kit.
 - Object files, assembly listings and other build output.
