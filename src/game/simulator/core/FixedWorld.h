@@ -69,6 +69,11 @@ public:
     }
     int GetX() const { return mX; }
     int GetY() const { return mY; }
+    // Wii: SetX and SetY store the int and return the stored byte, sign-extended. The
+    // return is what UpdateChairFacing needs: unused there, it still leaves the shift that
+    // the bounds check's read of the byte reuses two blocks later.
+    int SetX(int x) { return mX = x; }
+    int SetY(int y) { return mY = y; }
     int GetLevel() const { return mLevel; }
     // The same, called as functions (0x248DB8, 0x248DC0) where they aren't inlined.
     int GetXOutOfLine() const;
