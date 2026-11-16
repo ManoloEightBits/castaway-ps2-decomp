@@ -673,7 +673,7 @@ const char *SimBodyPart::GetCharacterType() const
 {
     if (description != 0)
         return description->GetTypeCode();
-    const CasSimTypeInfo *info = CasUtils::GetBodyPartTypeInfoTable();
+    const CasSimTypeInfo *info = CasUtils::GetBodyPartTypeInfoTableInline();
     if (info != 0) {
         if (characterFlags[0])
             return info->typeCodes[0];

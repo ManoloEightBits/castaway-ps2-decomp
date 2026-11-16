@@ -20,7 +20,9 @@ public:
     virtual void Slot10();
     virtual void Slot11();
     virtual void Slot12();
-    virtual int HasFunction(s16 index); // the tree ID at that entry point; 0 is none
+    // The tree ID at that entry point; 0 is none. The index is an int: cXObject::RunTree passes
+    // its ObjEntryPoint without narrowing it, which this compiler always does for a short.
+    virtual int HasFunction(int index);
 };
 
 // An object's type: the namespace IDs that a tree's ID range selects, its definition, and its
@@ -60,7 +62,8 @@ public:
     TreeTab *mTreeTab;     // 0x3c  Wii: a ConsoleAutoRefCount<ITreeTable>
     u8 pad_0x40[0x40];     // 0x40
     ObjectFolder *mFolder; // 0x80
-    u8 pad_0x84[0x2c];     // 0x84
+    u8 pad_0x84[0x28];     // 0x84
+    int mFlags;            // 0xac  bit 1: GetNeedsReset
     class CatalogResource *mCachedCatalogResource; // 0xb0  Wii: GetCachedSelectorCatalogResource
     u8 pad_0xb4[8];        // 0xb4
     void *mSimDescription; // 0xbc
@@ -72,6 +75,8 @@ public:
     const class BString2 &GetUserLastName() const;    // 0x1DA068
     void SetUserLastName(const class BString2 &name); // 0x1DA0C8
     bool compare(int guid) const { return guid == GetGUID(); }
+    // Wii keeps this as a function; cXObject::PostLoad inlines it.
+    int GetNeedsReset() const { return (mFlags >> 1) & 1; }
     ObjSelector *GetMasterSelector();
     class TreeTab *GetTreeTab();
     int CountTypeAttributes();

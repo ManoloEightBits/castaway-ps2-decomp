@@ -36,6 +36,7 @@ public:
     // Wii: SimFlag. Only the value cXObject::Error passes is known; the name is ours.
     enum SimFlag { kSimFlagError = 4 };
     void SetSimFlag(int id, SimFlag flag, bool set); // 0x255688
+    void CleanupPeople(cXObject *object);            // 0x255290  Wii's name; PS2 by PostLoad
     s16 MakeNewOutOfWorldObject(class ObjSelector *selector, s16 *a); // 0x2215D0
 
     // The game has this as a function and also inlines it in TryAnimate.

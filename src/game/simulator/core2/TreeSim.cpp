@@ -321,8 +321,10 @@ StackElem *TreeSim::GetHighLevelAction()
     return GetNthElem(0);
 }
 
-int TreeSim::RunCheckTree(Behavior *behavior, s16 stackObject, s16 treeID, s16 *params)
+int TreeSim::RunCheckTree(Behavior *behavior, s16 stackObject, int treeIDIn, s16 *params)
 {
+    // The game sign-extends the ID at entry as it does an s16 parameter; see TreeSim.h.
+    s16 treeID = treeIDIn;
     if (mError != 0)
         return 0;
 

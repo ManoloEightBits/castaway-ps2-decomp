@@ -4,7 +4,29 @@
 #include "game/GameData.h"
 #include "game/simulator/core/Neighborhood.h"
 #include "game/simulator/core/ObjectModule.h"
+#include "game/simulator/core/FixedWorld.h"
 #include "game/simulator/core/ObjSelector.h"
+#include "game/simulator/objectdata/XObjLang.h"
+
+inline int cXObject::GetTreeID(ObjEntryPoint entry)
+{
+    return mSelector->GetFnTable()->HasFunction(entry);
+}
+
+inline int cXObject::RunTreeInline(ObjEntryPoint entry, s16 a, s16 *param)
+{
+    int tree = GetTreeID(entry);
+    if (tree != 0)
+        return RunCheckTree(mSelector->mBehavior, a, tree, param);
+    return 0;
+}
+
+// Runs the tree at an entry point to its end, with `a` as the stack object. 0 when the
+// object has no tree there.
+int cXObject::RunTree(ObjEntryPoint entry, s16 a, s16 *param)
+{
+    return RunTreeInline(entry, a, param);
+}
 
 void cXObject::PreSave()
 {
@@ -175,4 +197,165 @@ void cXObject::TransitionToNewHouse(s16 lot, s16 type, s16 c)
             globals->field_0x484 = 1;
         }
     }
+}
+
+// The user may delete an object when the globals say anything goes, or when it can be picked
+// up, its variable 0x2b has bit 3 set, and none of its slots holds another object.
+int cXObject::UserCanDelete()
+{
+    if (Globs::pEORGlobals->field_0x414)
+        return 1;
+    // The game calls this one directly, not through the vtable.
+    if (!cXObject::UserCanPickup())
+        return 0;
+    if (!(mVars[0x2b] & 8))
+        return 0;
+    for (int i = CountObjectSlots() - 1; i >= 0; i--) {
+        if (GetContainedObject(i))
+            return 0;
+    }
+    return 1;
+}
+
+// A single-tile object runs its user-pickup tree, then the tree of every object in its slots;
+// a multi-tile one leaves that to its parts. Then it is picked up.
+void cXObject::UserPickup(bool a)
+{
+    if (!IsMultiTile()) {
+        RunTree(kObjEntryUserPickup, 0, 0);
+        int count = CountObjectSlots();
+        for (int i = 0; i < count; i++) {
+            if (GetContainedObject(i))
+                GetContainedObject(i)->RunTree(kObjEntryUserPickup, 0, 0);
+        }
+    }
+    Pickup();
+}
+
+// Placed, then the user-placement trees run the same way UserPickup runs the pickup ones.
+void cXObject::UserPlace(const FTilePt &tile, int a, cXObject *object, int b)
+{
+    Place(tile, a, object, b);
+    if (!IsMultiTile()) {
+        RunTree(kObjEntryUserPlacement, 0, 0);
+        int count = CountObjectSlots();
+        for (int i = 0; i < count; i++) {
+            if (GetContainedObject(i))
+                GetContainedObject(i)->RunTree(kObjEntryUserPlacement, 0, 0);
+        }
+    }
+}
+
+// After a load: the level and location are set again, a selector that needs a reset (or the
+// placeholder selector) loses its people and is cleaned up and re-initialised, and outside
+// author mode the load tree runs with the transition type as its parameter.
+void cXObject::PostLoad(int a, Globs::TransitionType type)
+{
+    if (mLevel == 0)
+        SetLevel(1);
+    SetLocation(GetLocationRef(), mLevel);
+    s16 params[4];
+    params[0] = type;
+    params[1] = 0;
+    params[2] = 0;
+    params[3] = 0;
+    int needsReset = mSelector->GetNeedsReset();
+    ObjSelector *placeholder = GetObjectFolder()->GetPlaceholder();
+    // Both builds compute this compare as a value before testing needsReset.
+    int isPlaceholder = mSelector == placeholder;
+    if (needsReset || isPlaceholder) {
+        mModule->CleanupPeople(this);
+        Cleanup(0);
+        if (needsReset)
+            RunTree(kObjEntryInit, 0, 0);
+    }
+    if (!_gd.IsAuthorMode())
+        RunTree(kObjEntryLoad, 0, params);
+    UpdateSimFlags();
+}
+
+// Weather damage: each damage type whose armour is under 255 times the scale adds its amount
+// less the armour to the total, which never goes below zero. A positive total runs the
+// apply-damage tree with it.
+void cXObject::ApplyDamage(const Weather::DamageEvent &event, s16 scale)
+{
+    if ((s16)GetTreeID(kObjEntryApplyDamage) == 0)
+        return;
+    Weather::Armor armor;
+    CalcArmorAgainstDamage(event, armor);
+    s16 params[8];
+    memset(params, 0, sizeof(params));
+    for (int i = 0; i < Weather::DAMAGE_TYPE_COUNT; i++) {
+        if (armor.values[i] < scale * 255) {
+            int damage = params[0] + event.amounts[i] - armor.values[i];
+            if (damage < 0)
+                damage = 0;
+            params[0] = damage;
+        }
+    }
+    if (params[0] > 0)
+        RunTreeInline(kObjEntryApplyDamage, 0, params);
+}
+
+bool cXObject::IsPerson() const
+{
+    return IsPersonInline();
+}
+
+cXObject *cXObject::HierGetParent()
+{
+    return GetObjectFromID(mVars[0x1a]);
+}
+
+cXObject *cXObject::GetContainer()
+{
+    return GetContainerInline();
+}
+
+// Whether the user may pick the object up, with the reason in gPlacementError when not: 0x25
+// its variable 0x2b says it can't be, 0x26 it is in use (variable 0x3e, the occupied bit, or
+// a Sim holds it), 0x27 its tile may not be edited. Two objects by GUID skip the check of
+// what they contain; anything else fails when something in its slots can't be picked up.
+int cXObject::UserCanPickup()
+{
+    gPlacementError = 0;
+    gPlacementConflict = 0;
+    if (Globs::pEORGlobals->field_0x414)
+        return 1;
+    if (!(mVars[0x2b] & 2)) {
+        gPlacementError = 0x25;
+        return 0;
+    }
+    if (mVars[0x3e] > 0) {
+        gPlacementError = 0x26;
+        return 0;
+    }
+    if (IsOccupied()) {
+        gPlacementError = 0x26;
+        return 0;
+    }
+    cXObject *container = GetContainerInline();
+    if (container != 0 && container->IsPerson()) {
+        gPlacementError = 0x26;
+        return 0;
+    }
+    int guid = mSelector != 0 ? mSelector->GetGUID() : 0;
+    switch (guid) {
+    case 0x0D4BA4C8:
+    case 0x152C7A14:
+        break;
+    default:
+        for (int i = CountObjectSlots() - 1; i >= 0; i--) {
+            cXObject *object = GetContainedObject(i);
+            if (object != 0 && !object->UserCanPickup())
+                return 0;
+        }
+        break;
+    }
+    CTilePt tile = GetCTilePt();
+    if (!gFixedWorld->OutOfGrid(tile) && !gFixedWorld->MayEditTile(tile)) {
+        gPlacementError = 0x27;
+        return 0;
+    }
+    return 1;
 }

@@ -1,6 +1,7 @@
 #include "game/simulator/core/ClothingItem.h"
 
 #include "common/ReconBuffer.h"
+#include "game/cas/CasUtils.h"
 
 s16 ClothingItem::GetID() const
 {
@@ -165,4 +166,35 @@ void ClothingItem::DoStream(ReconBuffer *buffer, int version)
     buffer->ReconBool((bool *)&isMale);
     if (version >= 0x7B)
         buffer->ReconBool((bool *)&isDamaged);
+}
+
+inline BodyPartTypeInfo *ClothingItem::GetBodyPartTypeInfo() const
+{
+    const CasSimTypeInfo *table = CasUtils::GetBodyPartTypeInfoTable();
+    if (table == 0)
+        return 0;
+    return &table->bodyPartTypes[CasUtils::GetBodyPartIndex((Character::eBodyPart)bodyPart)];
+}
+
+inline Sim::BodyPartGeometryTSC6 *ClothingItem::GetClothingSetData() const
+{
+    return CasUtils::GetClothingSetData(isMale, (Character::eBodyPart)bodyPart, clothingSetIndex);
+}
+
+// A piece can be dyed when its body part type allows it (flag 0x80) and its clothing set has
+// more than one texture variation.
+bool ClothingItem::IsDyable()
+{
+    BodyPartTypeInfo *info = GetBodyPartTypeInfo();
+    if (info == 0)
+        return false;
+    if (!(info->field_0xc & 0x80))
+        return false;
+    Sim::BodyPartGeometryTSC6 *set = GetClothingSetData();
+    if (set == 0)
+        return false;
+    // An if that returns true keeps the game's compare: the 1 in a register, then slt.
+    if (set->textureVariations.size() > 1)
+        return true;
+    return false;
 }
