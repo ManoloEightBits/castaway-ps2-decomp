@@ -20,7 +20,7 @@ public:
     virtual void Slot10();
     virtual void Slot11();
     virtual void Slot12();
-    virtual int HasFunction(s16 index);
+    virtual int HasFunction(s16 index); // the tree ID at that entry point; 0 is none
 };
 
 // An object's type: the namespace IDs that a tree's ID range selects, its definition, and its

@@ -27,6 +27,10 @@ class Armor;
 
 class CTilePt;
 
+// Wii: ObjEntryPoint, the index of a tree in an object's entry-point table. Only the two the
+// inventory runs are known; the names are ours.
+enum ObjEntryPoint { kObjEntryOnAdd = 0x1e, kObjEntryOnRemove = 0x1f };
+
 // Wii: FTilePt, a tile position: x and y, two FInts with four bits of fraction.
 class FTilePt {
 public:
@@ -141,6 +145,8 @@ public:
     u32 pad_0x14[0x16]; // 0x14
 
     bool IsActive() const { return mSprite != 0; }
+
+    void Tick(); // 0x1C0AD8
 };
 STATIC_ASSERT(SpriteSlot_size, sizeof(SpriteSlot) == 0x6c);
 
@@ -382,6 +388,9 @@ public:
     }
     cXObject *GetObjectFromID(s16 id) { return mModule->GetObjectFromID(id); }
     s16 *GetDef() { return mDef; }
+    int RunTree(ObjEntryPoint entry, s16 a, s16 *param); // 0x253FD8
+    void SetWasPlacedByPlayer(bool placed);               // 0x253C98
+    int CanPlaceSingleTile(const FTilePt &tile, int a, cXObject *object, int b); // 0x253958
 
     // Reads and writes one operand of an instruction: bhav.md lists the scopes. InterpValue
     // returns 1, or -1 once it has stopped the tree with an error.

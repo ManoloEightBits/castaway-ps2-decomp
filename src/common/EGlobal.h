@@ -34,9 +34,20 @@ public:
     u8 field_0x1fc[4];         // 0x1fc
     int mTransitionType;       // 0x200
     int mPreviousLot;          // 0x204
-    u8 field_0x208[0x240];     // 0x208
+    u8 field_0x208[0x20c];     // 0x208
+    int field_0x414;           // 0x414  when set, UserCanDelete allows anything
+    u8 field_0x418[0x30];      // 0x418
     int useGameStateTextures;  // 0x448  when set, texture ids are rehashed with "_GAME"
-    u8 field_0x44c[0x78];      // 0x44c
+    u8 field_0x44c[0x30];      // 0x44c
+    // Set by cXObject::TransitionToNewHouse for the transition type given: Wii keeps them
+    // as bytes at 0x3cc to 0x3d8, PS2 as words.
+    int field_0x47c;           // 0x47c  type 3, and type 5
+    int field_0x480;           // 0x480  type 2, with the HUD's GotoMainMenu
+    int field_0x484;           // 0x484  other types
+    int field_0x488;           // 0x488
+    int field_0x48c;           // 0x48c  every type but 2 and 3
+    int mTransitionLot;        // 0x490  the lot for type 5, 1 otherwise
+    u8 field_0x494[0x30];      // 0x494
     int field_0x4c4;           // 0x4c4  GenericSimCall 0x25 sets it to t0 != 0
     s16 mTransitioningNeighbor; // 0x4c8
 

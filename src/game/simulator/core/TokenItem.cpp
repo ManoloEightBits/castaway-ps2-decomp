@@ -2,6 +2,7 @@
 
 #include "common/ReconBuffer.h"
 #include "game/simulator/core/Inventory.h"
+#include "game/simulator/core/ObjectModule.h"
 
 s16 TokenItem::GetID() const
 {
@@ -180,4 +181,25 @@ bool TokenItem::IsDye()
     if (mToken)
         return mToken->HasFlag(0x4000);
     return false;
+}
+
+// A token that stands for an object (flag 0x10) and has some left makes one out-of-world object
+// with variable 0x29 set, and takes one off the count. Null when it can't.
+cXObject *TokenItem::MakeObject(Family *family, s16 a)
+{
+    const InventoryTokens *token = mToken;
+    if (token == 0 || field_0xa <= 0 || (s32)(token->mFlags & 0x10) <= 0)
+        return 0;
+    u32 guid = token->mGuid;
+    if (guid == 0)
+        return 0;
+    ObjSelector *selector = GetObjectFolder()->GetSelectorByGUID(guid);
+    s16 id = GetObjectModule()->MakeNewOutOfWorldObject(selector, 0);
+    cXObject *object = GetObjectModule()->GetObjectFromID(id);
+    object->mVars.WriteVar(0x29, 1);
+    object->mVars.WriteVar(0xF, 0);
+    object->mVars.WriteVar(0x27, 0);
+    object->SetWasPlacedByPlayer(true);
+    field_0xa--;
+    return object;
 }

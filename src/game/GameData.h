@@ -48,6 +48,7 @@ public:
     int mHudTransitionTarget; // 0xc0
 
     int GetHudTransitionTarget() const { return mHudTransitionTarget; }
+    void GotoMainMenu(); // 0x2E1D88
 };
 
 struct LoadInfo {

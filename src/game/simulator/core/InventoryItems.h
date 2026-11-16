@@ -42,7 +42,7 @@ public:
     virtual const IngredientToken *GetIngredientToken(); // 15
     virtual void DoStream(ReconBuffer *buffer, int a); // 16
     virtual void LoadItemInfo(cXObject *object, Family *family, s16 a); // 17
-    virtual int MakeObject(Family *family, s16 a);    // 18
+    virtual cXObject *MakeObject(Family *family, s16 a); // 18
     virtual bool IsFood();                            // 19
     virtual bool IsFastFood();                        // 20
     virtual bool IsTool();                            // 21
@@ -81,7 +81,8 @@ public:
     int AddObjectItem(cXObject *object);
     void CheckForAddGoals(int guid, s16 a);
     static s16 GetTokenIDFromGUID(int guid);
-    static void RunOnAddTree(Family *family, cXObject *object, s16 index);
+    static void RunOnAddTree(Family *family, cXObject *object, s16 index);    // 0x24E658
+    static void RunOnRemoveTree(Family *family, cXObject *object, s16 index); // inlined in LoadItemInfo
     static s16 s_nNextInstanceID;
 
     // Wii: CanHoldMoreNonTokens and SetInstanceID, inlined on PS2.

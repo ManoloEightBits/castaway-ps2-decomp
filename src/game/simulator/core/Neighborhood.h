@@ -82,6 +82,7 @@ public:
 
     GoalAndUnlockData *GetGoalAndUnlockData() { return &mGoals; }
     Neighbor *FindNeighborByID(int id);
+    Neighbor *FindNeighborByGUID(int guid); // 0x2515B8
     int RemoveFromFamily(Neighbor *neighbor, bool a); // GenericSimCall 6: 0 when it worked
     int AddToFamily(Neighbor *neighbor, Family *family); // 0x2055D8, 0 when it worked
     Family *MakeNewFamily(bool freePlay, int number);    // 0x205250, our name
@@ -139,6 +140,7 @@ public:
     enum TransitionType { };
     static Neighborhood *pNeighborhood;
     static class House *pHouse;
+    static class EGlobal *pEORGlobals; // 0x50A6A8  Wii: GetEORGlobals
 };
 
 class House {
