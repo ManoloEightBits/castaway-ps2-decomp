@@ -11,6 +11,8 @@ The Wii build in ts2c is the **same build number** (B.08.09.0), which is why its
 | `castaway_ps2_names.csv` | Every candidate match with its evidence, including the `review` and `low` tiers that are **not** auto-applied |
 | `wii_function_reference.csv` | All 27,483 named Wii functions: readable name, mangled name, source file, size, strings used. Your main lookup table — open in a spreadsheet and filter. Local only: `.gitignore` excludes it because it's built from unlicensed ts2c data and contains game strings. |
 | `ApplyCastawayNames.java` | Ghidra script that applies the names |
+| `ApplySymbols.java` | Headless Ghidra script that applies the decomp's proven names from `config/symbols.txt`; run it through `tools/gsync.py` (see below) |
+| `DecompileFunctions.java` | Headless Ghidra script that writes the decompiler's C for a list of addresses, one file per function with its size and callers in the header; run it through `tools/gdec.py` (see below) |
 | `cas_layouts.csv` | Recovered struct layouts for `CasSimDescription` and `SimBodyPart`, with the evidence for each field. Apply with `tools/ApplyClassLayouts.java` |
 | `tools/` | The scripts that produced all of this (re-run them as matching improves) |
 
@@ -36,6 +38,34 @@ The Wii build in ts2c is the **same build number** (B.08.09.0), which is why its
 5. Open it, say **Yes** to auto-analysis (defaults are fine). Takes a few minutes.
 6. **Window → Script Manager → Manage Script Directories** (bundle icon) → add this folder. Find `ApplyCastawayNames` under category *Castaway*, run it, pick `castaway_ps2_names_ghidra.txt`.
 7. **Window → Bookmarks**, filter by category "Castaway names" to walk through what was applied.
+
+## Headless: decompiler drafts and name sync
+
+Once the project exists, two wrappers run Ghidra without the GUI. Both read these
+environment variables; the first two have no default because they are machine paths.
+
+| Variable | Meaning | Default |
+|---|---|---|
+| `CASTAWAY_GHIDRA` | Ghidra install folder, the one with `support/analyzeHeadless` | `GHIDRA_INSTALL_DIR` if set, else required |
+| `CASTAWAY_GHIDRA_PROJECTS` | Folder holding the project | required |
+| `CASTAWAY_GHIDRA_PROJECT` | Project name | `Castaway` |
+| `CASTAWAY_GHIDRA_PROGRAM` | Program name inside the project | `SLUS_216.64` |
+| `CASTAWAY_GHIDRA_OUT` | Where drafts, lists and logs go | `<projects>/castaway_drafts` |
+
+```bash
+python pkg/tools/gdec.py 0x20F258 GetTileWidth__8cXObject   # decompiled C per function; names resolve via symbols.txt and the names CSV
+python pkg/tools/gsync.py --dry-run                         # push config/symbols.txt names into the project; drop --dry-run to apply
+```
+
+`gdec.py` opens the project read-only with analysis off and reuses a draft already in the
+output folder (`--force` redoes it, `--quiet` prints only paths); a run with new addresses
+takes ten to twenty seconds however many you pass, so batch them. `gsync.py` demangles the
+GCC 2.95 names to `Class::Name`, prefers `symbols.txt` over the CSV's propagated names and
+never overwrites a name set by hand in Ghidra; rerun it after each round of matching and
+then refresh your own backup of the project. Both refuse to run while the project is open
+in the GUI. Drafts recover the logic, not the register ranks that decide a match, and they
+are derived from the executable: `tools/check_repo.py` rejects them by their header line, so
+keep the output folder outside the repo.
 
 ## Suggested first area: Create-a-Sim
 

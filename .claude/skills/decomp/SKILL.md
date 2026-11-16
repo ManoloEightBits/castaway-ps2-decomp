@@ -45,7 +45,10 @@ small ones in the same class have fixed the types.
 writing anything. The Wii build keeps small inline functions as real functions, so it shows
 bodies that PS2 inlined, and its branch shape is the one to copy: one `return 0` at the
 end, `if (x) return 1;` above it. Writing from the Wii's shape and then adjusting is what
-matched most of the interpreter.
+matched most of the interpreter. For a first draft of the logic, `pkg/tools/gdec.py <address
+or name>` prints Ghidra's decompiled C with the callers in its header (setup in
+`pkg/README.md`); it recovers logic, not register ranks, so the shape rules above still
+decide the match, and its output stays outside the repo.
 
 **Write it, then verify one file.** Add the function to the class's `.cpp`, declare what
 it proves in the header with offsets as trailing comments, add the mangled name and
