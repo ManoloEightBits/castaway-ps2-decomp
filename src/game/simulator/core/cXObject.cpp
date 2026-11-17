@@ -8,6 +8,8 @@
 #include "game/simulator/core/Lot.h"
 #include "game/simulator/core/cXMTObject.h"
 #include "game/simulator/core2/cXPerson.h"
+#include "game/simulator/core2/SlotLoader.h"
+#include "game/simulator/core/ObjectIterator.h"
 #include "game/simulator/core/ObjSelector.h"
 #include "game/simulator/objectdata/XObjLang.h"
 
@@ -477,6 +479,53 @@ HierarchySite::HierarchySite(cXObject *object, const FTilePt &tile, int slot)
     mValid = 1;
 }
 
+
+// 0x211978. Wii: UpdateChairFacing. Looks at the four orthogonal neighbours for a chair facing
+// this tile, then sets or clears bit 8 of variable 8 on every part, and reruns the placement
+// tree on a part whose bit changed if it has tree 0x19.
+void cXObject::UpdateChairFacing()
+{
+    CTilePt here = GetCTilePt();
+    CTilePt tile = GetCTilePt();
+    int x = here.GetX();
+    int y = here.GetY();
+    bool facing = false;
+    cFixedWorld *world = GetFixedWorld();
+    ObjectModule *module = GetObjectModule();
+    for (int dir = 0; dir < 8; dir += 2) {
+        tile.SetX(x + sXDirTable[dir]);
+        tile.SetY(y + sYDirTable[dir]);
+        if (!world->OutOfBounds(tile)) {
+            cXObject *object = module->GetObjectFromID(module->GetTileObjectID(tile));
+            while (object != 0 && object->HasZeroExtent())
+                object = object->GetNextObjectSibling();
+            if (object != 0) {
+                int opposite = (dir + 4) & 7;
+                if (object->IsChair()) {
+                    if (object->mVars[1] == opposite) {
+                        facing = true;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    for (ObjectIterator it(this, ObjectIterator::kAll); !it.finished(); ++it) {
+        cXObject *part = *it;
+        bool was = ((u16)part->mVars[8] >> 8) & 1;
+        s16 flags = part->GetData(8);
+        if (facing)
+            part->SetData(8, flags | 0x100);
+        else
+            part->SetData(8, flags & ~0x100);
+        if ((was && !facing) || (!was && facing)) {
+            s16 tree = part->GetTreeID(kObjEntryChairFacing);
+            if (tree != 0)
+                part->RunTree(kObjEntryPlacement, 0, 0);
+        }
+    }
+}
+
 // GetCTilePt's body again (cXObjectPrims.cpp has the first), here so that
 // CalcArmorAgainstDamage inlines it, as the game does. It must come after UserCanPickup,
 // which calls the game's copy at 0x253ED0: a function compiled before an inline's body has
@@ -626,3 +675,65 @@ void cXObject::Turn(int amount)
     UpdateWallAdjacency();
 }
 #endif
+
+// 0x20F258. Wii keeps the slot, the loader and the tile as calls; PS2 inlines the slot's copy
+// into push_back and both destructors, so the last store before the return is Slot's vtable
+// pointer going into the dead stack slot.
+void cXObject::Initialize()
+{
+    u32 namespaceID = GetSelector()->GetNamespaceID();
+    field_0x124 = 0;
+    field_0x128 = 0.0f;
+    field_0x12c = 0;
+    mCreationFrame = _framecount;
+    GetObjectFolder()->GetNamespaceSelector(namespaceID);
+    TreeSim::Initialize(GetSelector()->GetDefinition()[2], mTemps);
+    ObjectSlot slot;
+    mObjectSlots.push_back(slot);
+    if (GetDef()[0x14] != 0) {
+        s16 slotCount = GetDef()[0x14];
+        u32 loaderNamespace;
+        if (slotCount < 1000)
+            loaderNamespace = namespaceID;
+        else
+            loaderNamespace = GetSelector()->GetSemiNamespaceID();
+        SlotLoader loader(loaderNamespace);
+        loader.Load(slotCount, &mObjectSlots, &mRoutingSlots, &mSpriteSlots, this);
+    }
+    mVars.Initialize(this);
+    FTilePt tile;
+    tile.Set(-1, -1);
+    SetLocation(tile, 1);
+    // A member-to-member s16 copy: lhu and sh, then the member's value sign-extended (sll, sra)
+    // for the test and the size. A promoted local would load with lh.
+    mNumIndexedData = mDef[0x41];
+    if (mNumIndexedData != 0)
+        mIndexedData = new s16[mNumIndexedData];
+    else
+        mIndexedData = 0;
+    for (int i = 0; i < mNumIndexedData; i++)
+        mIndexedData[i] = 0;
+    CalcRoomScoreImpact();
+}
+
+// 0x253678
+cXObject *cXObject::HierGetChild(int slot)
+{
+    return mModule->GetObjectFromID(mObjectSlots[slot].mObjectID);
+}
+
+// 0x214258. Wii: GetTileWidth. A Sim's width is a global, 0 for a ghost; anything else has it
+// in definition word 0x43, 16 when that is 0.
+int cXObject::GetTileWidth()
+{
+    if (GetType() == 2) {
+        cXPerson *person = GetPerson();
+        if (person != 0 && person->IsGhost())
+            return 0;
+        return GetPersonWidth();
+    }
+    int width = 16;
+    if (mDef[0x43] != 0)
+        width = mDef[0x43];
+    return width;
+}

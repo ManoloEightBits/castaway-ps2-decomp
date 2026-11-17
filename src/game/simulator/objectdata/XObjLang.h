@@ -127,7 +127,7 @@ public:
     ObjSelector *GetSelectorByGUIDInline(int guid) { return mSelectors.findItem(guid); }
     ObjSelector *GetSelectorByGUID(int guid);
 
-    NamespaceSelector *GetNamespaceSelector(u32 namespaceID);
+    NamespaceSelector *GetNamespaceSelector(u32 namespaceID); // 0x21FD00
     ObjSelector *GetPlaceholder(); // 0x254AF8  Wii's name; PS2 by cXObject::PostLoad
 };
 

@@ -24,6 +24,9 @@ class RelMatrix;
 
 class CTilePt;
 
+// The engine's frame counter, read by cXObject::Initialize.
+extern u32 _framecount; // 0x49FDB8
+
 // Wii: ObjEntryPoint, the index of a tree in an object's entry-point table. The first four
 // are The Sims 2's function-table order; the names are ours, from the callers.
 enum ObjEntryPoint {
@@ -31,6 +34,9 @@ enum ObjEntryPoint {
     kObjEntryLoad = 2,           // PostLoad, with the transition type as the parameter
     kObjEntryUserPlacement = 0xb, // UserPlace
     kObjEntryUserPickup = 0xc,   // UserPickup
+    kObjEntryPlacement = 9,      // TS2's placement entry; UpdateChairFacing runs it on a part
+                                 // whose chair bit changed, if the part has tree 0x19
+    kObjEntryChairFacing = 0x19, // UpdateChairFacing: only a part with this tree reruns 9
     kObjEntryChair = 0x1a,       // IsChair: an object with this tree counts as a chair
     kObjEntryOnAdd = 0x1e,       // the inventory
     kObjEntryOnRemove = 0x1f,
@@ -178,19 +184,32 @@ public:
     }
 };
 
-// Wii: ObjectSlot. Slot 0 is the object's own; the slots a tree sees start at 1.
-class ObjectSlot {
+class SlotDescriptor;
+// Wii: Slot. PS2 has its vtable at 0x4B8020, after RoutingSlot, SpriteSlot and ObjectSlot.
+class Slot {
 public:
-    u32 field_0x0;       // 0x00
+    virtual ~Slot() {}
+    virtual void WriteSlot(SlotDescriptor *descriptor) const;
+};
+
+// Wii: ObjectSlot. Slot 0 is the object's own; the slots a tree sees start at 1. The
+// layout is the Wii constructor's: cXObject::Initialize copies one into mObjectSlots, and
+// the copy skips +6 (so it is padding, not a member) and moves 0x18 to 0x20 through the
+// float registers. Its vtable is at 0x4B8000, Slot's at 0x4B8020.
+class ObjectSlot : public Slot {
+public:
     s16 mObjectID;       // 0x04
-    s16 pad_0x6;         // 0x06
     int mHeight;         // 0x08  Wii: GetHeight. UserCanPlace refuses 5 to 7 with error 0xB.
-    u32 pad_0xc;         // 0x0c
+    int field_0xc;       // 0x0c  50 from the constructor
     int mFlags;          // 0x10  bit 17 a TS2 slot
-    u32 pad_0x14;        // 0x14
+    int field_0x14;      // 0x14
     f32 mXOffset;        // 0x18
     f32 mYOffset;        // 0x1c
-    u32 pad_0x20;        // 0x20
+    f32 field_0x20;      // 0x20
+
+    ObjectSlot(); // 0x1E1888
+    virtual ~ObjectSlot() {} // 0x1D8C88 is the vtable's copy; Initialize inlines this one
+    virtual void WriteSlot(SlotDescriptor *descriptor) const;
 
     bool IsTS2ObjectSlot() const { return (mFlags >> 17) & 1; }
     int GetHeight() const { return mHeight; }
@@ -248,13 +267,6 @@ public:
     f32 mGradient;     // 0x3c
     int mFacing;       // 0x40
     int mResolution;   // 0x44
-};
-
-// Wii: Slot. PS2 has its vtable at 0x4B8020, after RoutingSlot, SpriteSlot and ObjectSlot.
-class Slot {
-public:
-    virtual ~Slot() {}
-    virtual void WriteSlot(SlotDescriptor *descriptor) const;
 };
 
 class RoutingSlot : public Slot {
@@ -354,10 +366,10 @@ public:
     eastl::vector<RoutingSlot, eastl::allocator> mRoutingSlots; // 0x100
     eastl::vector<SpriteSlot, eastl::allocator> mSpriteSlots; // 0x110
     u8 field_0x120;            // 0x120
-    u32 field_0x124;           // 0x124
+    int field_0x124;           // 0x124  Initialize clears these three
     f32 field_0x128;           // 0x128
-    u8 field_0x12c;            // 0x12c
-    u32 field_0x130;           // 0x130 the frame count when the object was made
+    int field_0x12c;           // 0x12c  a byte on Wii, a word on PS2 (Initialize stores sw)
+    u32 mCreationFrame;        // 0x130  _framecount when Initialize ran
     s32 mGraphicsTagged;       // 0x134
     class CatalogResource *mCachedCatalogResource; // 0x138  Wii: GetCachedObjectCatalogResource
 
@@ -372,7 +384,7 @@ public:
     virtual void TransitionToNewHouse(s16 a, s16 b, s16 c);
     virtual void Cleanup(cXObject *object);
     virtual int GosubObjectTree(cXObject *object, s16 *params, s16 treeID, bool a);
-    virtual void Initialize();
+    virtual void Initialize(); // 0x20F258
     virtual void Reset(bool a);
     virtual void PostLoad(int a, Globs::TransitionType type);
     virtual void PreSave();
@@ -480,6 +492,7 @@ public:
     inline ObjectSlot *GetObjectSlot(int index);
     inline cXObject *GetObjectFromID(s16 id);
     s16 *GetDef() { return mDef; }
+    ObjSelector *GetSelector() { return mSelector; }
     int RunTree(ObjEntryPoint entry, s16 a, s16 *param); // 0x253FD8
     // Wii: GetTreeID. The tree at an entry point, or 0. Defined in cXObject.cpp.
     inline int GetTreeID(ObjEntryPoint entry);
@@ -497,6 +510,14 @@ public:
     // Wii: TestPlace, the placement check behind CanPlace and UserCanPlace.
     int TestPlace(PlacementSpec *spec); // 0x2104C8
     int GetTileWidth();                 // 0x214258
+    // Wii: GetPersonWidth, inlined on PS2. The width of every Sim's footprint.
+    static int gPersonWidth; // 0x492814
+    int GetPersonWidth() const { return gPersonWidth; }
+    // Wii: HasZeroExtent, bit 2 of the flags variable; UpdateChairFacing skips such objects.
+    int HasZeroExtent() const { return ((u16)mVars[8] >> 2) & 1; }
+    // Wii: HierGetChild, the object in slot `slot`. GetNextObjectSibling is slot 0.
+    cXObject *HierGetChild(int slot); // 0x253678
+    cXObject *GetNextObjectSibling() { return HierGetChild(0); }
     void UpdateWallAdjacency();         // 0x214098
     void UpdateChairFacing();           // 0x211978
     // Wii keeps this as a function; Turn inlines both calls. Defined in cXObject.cpp.

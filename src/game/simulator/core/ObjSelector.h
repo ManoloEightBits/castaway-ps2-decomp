@@ -62,6 +62,11 @@ public:
     TreeTab *mTreeTab;     // 0x3c  Wii: a ConsoleAutoRefCount<ITreeTable>
     u8 pad_0x40[0x40];     // 0x40
     ObjectFolder *mFolder; // 0x80
+
+    u32 GetNamespaceID() const { return mNamespaceID; }
+    u32 GetSemiNamespaceID() const { return mSemiNamespaceID; }
+    s16 *GetDefinition() const { return mDefinition; }
+
     u8 pad_0x84[0x28];     // 0x84
     int mFlags;            // 0xac  bit 1: GetNeedsReset
     class CatalogResource *mCachedCatalogResource; // 0xb0  Wii: GetCachedSelectorCatalogResource

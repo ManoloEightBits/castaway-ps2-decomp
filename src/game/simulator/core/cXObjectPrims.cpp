@@ -931,6 +931,7 @@ long cXObject::TryMakeActionString(StackElem *elem, XPrimParam *primParam)
 // Included here, where these classes were defined before they moved, because defining
 // CTilePt's inlines earlier in this file changes TrySetToNext's register choices.
 #include "game/simulator/core/FixedWorld.h"
+#include "game/simulator/core/ObjectIterator.h"
 
 inline CTilePt cXObject::GetCTilePt() const
 {
@@ -945,21 +946,6 @@ inline s16 GetTileObjectID(ObjectModule *module, const CTilePt &tile)
         return 0;
     return module->mTileObjects[y][x];
 }
-
-// Walks the objects on a tile.
-class ObjectIterator {
-public:
-    enum IterateType { kAll };
-
-    u32 field_0x0;     // 0x00
-    cXObject *mObject; // 0x04  0 at the end
-    u32 field_0x8;     // 0x08
-
-    ObjectIterator(const CTilePt &tile, IterateType type);
-    ObjectIterator &operator++();
-    cXObject *operator*() const { return mObject; }
-    bool finished() const { return mObject == 0 ? true : false; }
-};
 
 // Primitive 0x1f: step a value through a list of things.
 class SetToNextParam {
