@@ -1062,9 +1062,13 @@ The change is the value times 1/1800, so it's per tick: a game hour is 1,800 tic
 
 ## Picking up: CanPlace into a hand
 
-**Read on Wii, with PS2's error codes in the same order** (`cXObject::TestPlace`, PS2 `0x2104C8`, about 890 instructions). Likely. `Grab`'s two calls are `CanPlace(location, level, container, slot)` and `Place` with the same arguments, the container being me. `CanPlace` (`0x253938`) is `CanPlaceSingleTile` (`0x253958`): it builds a `PlacementSpec` and calls `TestPlace`.
+**Read on Wii, with PS2's error codes in the same order** (`cXObject::TestPlace`, PS2 `0x2104C8`, about 890 instructions). Likely. `Grab`'s two calls are `CanPlace(location, level, container, slot)` and `Place` with the same arguments, the container being me. `CanPlace` (`0x253938`) is `CanPlaceSingleTile` (`0x253958`): it builds a `PlacementSpec` and calls `TestPlace`. **Proven on PS2 (2026-11-15)** for `CanPlaceSingleTile` and the `PlacementSpec` constructor; `TestPlace` itself is still the Wii reading.
 
-**The `PlacementSpec`** (`0x255978`): `+0` a valid byte (1), `+4` the tile, `+0xC` the container, `+0x10` the slot (-1 without a container), `+0x14` the level. With a container whose slot isn't a TS2 slot, the tile becomes the container's own location.
+**The `PlacementSpec`** (`0x255978`): `+0` a valid flag (1; a byte on Wii, a word on PS2), `+4` the tile, `+0xC` the container, `+0x10` the slot (-1 without a container), `+0x14` the level. With a container whose slot isn't a TS2 slot, the tile becomes the container's own location. **Proven on PS2.** A `HierarchySite` (`0x255A28` from a spec, `0x255A78` from an object, tile and slot; both proven) has the same five fields with the slot counting from 1, slot 0 being the holder's own: a spec's slot plus one unless it is -1, and the holder's level.
+
+**`UserCanPlace`** (`0x2146A8`, **proven on PS2**), asked before the player drops an object: `gPlacementError` 1 when the tile is off the grid (`OutOfBounds`, which unlike `OutOfGrid` rejects the outermost row and column too) or may not be edited (`MayEditTile`); then `CanPlaceSingleTile`, which sets no code here; then both coordinates must have fraction 8, a tile centre; then, unless the globals flag that lets `UserCanDelete` delete anything is set, a container slot with a height (`ObjectSlot` `+8`) of 5 to 7 is error 0xB.
+
+**The footprint** (`ComputeRect`, `0x212180`, **proven on PS2**): a square of half `GetTileWidth` around the tile, then shrunk on each side by a nibble of definition word 0x4D, less the matching nibble of a Sim's person data 0x21 when variable 1's low bit is clear. The four nibbles are turned by the direction: with `t = (8 - variable 1 % 8) / 2`, nibble `t % 4` comes off the low y side, `(t + 1) % 4` off the high x side, `(t + 2) % 4` off the high y side and `(t + 3) % 4` off the low x side.
 
 **`TestPlace`** returns false at the first test that fails, with the reason in Wii's `gPlacementError`. Before the container tests it checks the tile: in bounds, tile flags and walls, grass for objects that need it or can't have it (0x13, 0x14), indoors or outdoors (9, 0xA), and without a container, `TestIntersection` (entry point 5). **With a container**, in order:
 
@@ -2680,7 +2684,7 @@ With no record, entry point 0 is global tree 0x10F, entry point 1 is global tree
 | 33 | `TryCallFunctionalTree`, `CheckForEvent` | Functional tree |
 | 34 | `NotifyBuildModeObjects` | Build mode |
 
-The purposes are read from the callers' names, so treat them as **likely**, except 0, 2, 11, 12 and 32: `PostLoad`, `UserPlace`, `UserPickup` and `ApplyDamage` match byte for byte on PS2 (2026-11-15), and 30 and 31 were proven with the inventory. `UserPlace` and `UserPickup` run 11 and 12 on a single-tile object and then on every object in its slots; a multi-tile object leaves that to its parts. `ApplyDamage` runs 32 only for a positive total, with parameter 0 set to it: each damage type whose armour is under 255 times the scale adds its amount less the armour, and the total never goes below zero. 14, 16, 18 to 24, 28 and 29 have no caller by number. Some may be reached through a variable.
+The purposes are read from the callers' names, so treat them as **likely**, except 0, 2, 11, 12 and 32: `PostLoad`, `UserPlace`, `UserPickup` and `ApplyDamage` match byte for byte on PS2 (2026-11-15), and 30 and 31 were proven with the inventory. `UserPlace` and `UserPickup` run 11 and 12 on a single-tile object and then on every object in its slots; a multi-tile object leaves that to its parts. `ApplyDamage` runs 32 only for a positive total, with parameter 0 set to it: each damage type whose armour is under 255 times the scale adds its amount less the armour, and the total never goes below zero. The armour is `CalcArmorAgainstDamage` (**proven on PS2**): a roof gets none; a wall or portal counts as walled when both its parts are in a room; anything else takes its `Room`'s first two words (walled, roofed) and, when not roofed, looks for tile flag 8, a roof, on its tile. Walled and roofed absorb damage types 0 and 1 and the skin amount in full; walled alone half of type 0; roofed alone type 1 and the skin amount. 14, 16, 18 to 24, 28 and 29 have no caller by number. Some may be reached through a variable.
 
 ### How an object starts running
 
@@ -2750,7 +2754,7 @@ The tables are `ObjDefinition`, 196 bytes or 98 s16 words, which is why scope 0x
 
 The game saves memory by keeping unchanged variables in a table shared by each object type, and writing a value equal to the shared one removes the object's own copy. That's invisible to a tree, so a port can give each object a plain array of 72. Reading variable 0x19 also clears the idle status, as scope 3 says.
 
-**What else `Initialize` does:** it sets the stack up with the temps as default parameters, loads the slot set, moves the object off the map to (-1, -1), and works out its room score.
+**What else `Initialize` does:** it sets the stack up with the temps as default parameters, loads the slot set, moves the object off the map to (-1, -1), and works out its room score. That last is `CalcRoomScoreImpact` (**proven on PS2**): for the lead part of a multi-tile object only, and only while variable 7 is still 0, variable 7 becomes the definition's style (word 0x15) halved for a wall, portal or roof, 0 for a Sim, and a quarter more when definition word 0x45 is 9, rounded to the nearest.
 
 ## Load details
 

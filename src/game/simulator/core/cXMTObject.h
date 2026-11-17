@@ -46,6 +46,16 @@ public:
     virtual cXObject *GetAnchorTile();
 
     cXMTObject *GetFirstMultiTileObject() { return mFirstPart ? mFirstPart : this; }
+    cXMTObject *GetNextMultiTileObject() { return mNextPart; }
+    // Wii: IsLeadObject, the part the others point at, or one with no first part.
+    // The compare on the fall-through path and this on its left; written as one || the
+    // whole caller changes.
+    bool IsLeadObject()
+    {
+        if (mFirstPart != 0)
+            return this == mFirstPart;
+        return true;
+    }
 };
 
 #endif

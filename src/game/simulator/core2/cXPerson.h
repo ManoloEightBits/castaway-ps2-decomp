@@ -276,6 +276,8 @@ public:
     RoutingState Routing_Initial(bool &done, TreeReturnCode &code);
     // Wii: IsGhost, inlined on PS2: person data 0xC, and bit 2 of the neighbour's word 0x2A.
     bool IsGhost() { return mPersonData[0xc] ? ((u16)mNeighbor->mPersonData[0x2a] >> 2) & 1 : 0; }
+    // Wii: GetPersonData. ComputeRect reads 0x21, the Sim's footprint offsets.
+    s16 GetPersonData(int index) const { return mPersonData[index]; }
     RoutingState Routing_Succeeded(bool &done, TreeReturnCode &code);
     RoutingState Routing_Trapped(bool &done, TreeReturnCode &code);
     int AskOthersToMove(XRoute *route);

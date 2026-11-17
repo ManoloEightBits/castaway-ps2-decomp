@@ -31,6 +31,7 @@ enum ObjEntryPoint {
     kObjEntryLoad = 2,           // PostLoad, with the transition type as the parameter
     kObjEntryUserPlacement = 0xb, // UserPlace
     kObjEntryUserPickup = 0xc,   // UserPickup
+    kObjEntryChair = 0x1a,       // IsChair: an object with this tree counts as a chair
     kObjEntryOnAdd = 0x1e,       // the inventory
     kObjEntryOnRemove = 0x1f,
     kObjEntryApplyDamage = 0x20  // ApplyDamage, with the damage as the parameter
@@ -43,6 +44,10 @@ public:
     int mY; // 0x04
 
     FTilePt() {}
+
+    // Wii: FInt::Frac on each coordinate, the four fraction bits. 8 is the tile's centre.
+    int FracX() const { return mX & 0xf; }
+    int FracY() const { return mY & 0xf; }
 
     // Wii: Set. Each coordinate is a Wii FInt, the integer above 4 bits of fraction:
     // SetInteger keeps the fraction, then SetFrac clears it.
@@ -155,12 +160,32 @@ public:
 };
 STATIC_ASSERT(SpriteSlot_size, sizeof(SpriteSlot) == 0x6c);
 
+// Wii: FTileRect, the footprint ComputeRect fills. SetWhole's four arguments land at 0xc,
+// 0x8, 0x4 and 0x0 in that order.
+class FTileRect {
+public:
+    int mMaxY; // 0x00
+    int mMaxX; // 0x04
+    int mMinY; // 0x08
+    int mMinX; // 0x0c
+
+    void SetWhole(int minX, int minY, int maxX, int maxY)
+    {
+        mMinX = minX;
+        mMinY = minY;
+        mMaxX = maxX;
+        mMaxY = maxY;
+    }
+};
+
 // Wii: ObjectSlot. Slot 0 is the object's own; the slots a tree sees start at 1.
 class ObjectSlot {
 public:
     u32 field_0x0;       // 0x00
     s16 mObjectID;       // 0x04
-    u8 pad_0x6[0xa];     // 0x06
+    s16 pad_0x6;         // 0x06
+    int mHeight;         // 0x08  Wii: GetHeight. UserCanPlace refuses 5 to 7 with error 0xB.
+    u32 pad_0xc;         // 0x0c
     int mFlags;          // 0x10  bit 17 a TS2 slot
     u32 pad_0x14;        // 0x14
     f32 mXOffset;        // 0x18
@@ -168,10 +193,42 @@ public:
     u32 pad_0x20;        // 0x20
 
     bool IsTS2ObjectSlot() const { return (mFlags >> 17) & 1; }
+    int GetHeight() const { return mHeight; }
     f32 GetXOffset() const { return mXOffset; }
     f32 GetYOffset() const { return mYOffset; }
 };
 STATIC_ASSERT(ObjectSlot_size, sizeof(ObjectSlot) == 0x24);
+
+// Wii: PlacementSpec, what TestPlace and Place take: the tile an object goes to and the slot
+// of the object it goes into. Wii's first field is a byte; PS2 stores a word.
+class cXObject;
+class PlacementSpec {
+public:
+    int mValid;        // 0x00  1 from the four-argument constructor
+    FTilePt mTile;     // 0x04  the tile given, or the holder's own location for a non-TS2 slot
+    cXObject *mObject; // 0x0c  the object placed into, or 0
+    int mSlot;         // 0x10  the slot in it, -1 without an object
+    int mLevel;        // 0x14
+
+    PlacementSpec(const FTilePt &tile, int level, cXObject *object, int slot); // 0x255978
+};
+STATIC_ASSERT(PlacementSpec_size, sizeof(PlacementSpec) == 0x18);
+
+// Wii: HierarchySite, where an object sits in the hierarchy: a PlacementSpec's five fields,
+// but the slot counts from 1 (slot 0 is the holder's own), so one built from a spec adds 1
+// to the slot unless it is -1. HierGetSite, HierSetSite and HierGetObject take one.
+class HierarchySite {
+public:
+    int mValid;        // 0x00
+    FTilePt mTile;     // 0x04
+    cXObject *mObject; // 0x0c
+    int mSlot;         // 0x10
+    int mLevel;        // 0x14  the holder's, from the three-argument constructor
+
+    HierarchySite(const PlacementSpec *spec);                       // 0x255A28
+    HierarchySite(cXObject *object, const FTilePt &tile, int slot); // 0x255A78
+};
+STATIC_ASSERT(HierarchySite_size, sizeof(HierarchySite) == 0x18);
 
 // A base holding only the vptr, which puts it at offset 0.
 
@@ -323,11 +380,14 @@ public:
     virtual void CalcArmorAgainstDamage(const Weather::DamageEvent &event, Weather::Armor &armor);
     virtual void Turn(int a);
     virtual void Pickup();
-    virtual int CanPlace(const FTilePt &tile, int a, cXObject *object, int b);
-    virtual void Place(const FTilePt &tile, int a, cXObject *object, int b);
+    // The level and slot: HierarchySite's three-argument constructor stores the holder's
+    // mLevel where PlacementSpec's stores the second argument, and both put the fourth
+    // through GetObjectSlot.
+    virtual int CanPlace(const FTilePt &tile, int level, cXObject *object, int slot);
+    virtual void Place(const FTilePt &tile, int level, cXObject *object, int slot);
     virtual int IsPartOfMe(cXObject *object);
-    virtual int UserCanPlace(const FTilePt &tile, int a, cXObject *object, int b);
-    virtual void UserPlace(const FTilePt &tile, int a, cXObject *object, int b);
+    virtual int UserCanPlace(const FTilePt &tile, int level, cXObject *object, int slot);
+    virtual void UserPlace(const FTilePt &tile, int level, cXObject *object, int slot);
     virtual int UserCanPickup();
     virtual void UserPickup(bool a);
     virtual int UserCanDelete();
@@ -352,14 +412,30 @@ public:
     // GotoRoutingSlot calls those. Here they need their own names.
     s16 GetTypeOutOfLine() const;
     int IsInWorldOutOfLine() const;
-    // Wii: IsPortal, inlined on PS2. GotoRoutingSlot drops the result.
+    // Wii: IsPortal, inlined on PS2. CalcArmorAgainstDamage keeps GetPortal's result as a
+    // value (sltu); GotoRoutingSlot drops the result.
     bool IsPortal()
     {
         bool portal = false;
-        if (GetTypeOutOfLine() == 8 && GetPortal())
-            portal = true;
+        if (GetTypeOutOfLine() == 8)
+            portal = GetPortal() != 0;
         return portal;
     }
+    // Wii: IsRoof and IsStructure, by type; inlined into CalcArmorAgainstDamage.
+    bool IsRoof() { return GetTypeOutOfLine() == 14; }
+    bool IsStructure() { return GetTypeOutOfLine() == 5; }
+    // Wii: IsVehicle, type 12. A function on both; the body is the evidence for the name.
+    bool IsVehicle(); // 0x254078
+    // Wii: IsChair, whether the object has the tree at entry point 0x1a. Defined in
+    // cXObject.cpp after GetTreeID, which it calls.
+    inline bool IsChair();
+    // Wii: GetDef as a function (0x245700 here too, called by GetStyle in
+    // CalcRoomScoreImpact), GetStyle and SetData.
+    s16 *GetDefOutOfLine(); // 0x245700
+    s16 GetStyle() { return GetDefOutOfLine()[0x15]; }
+    void SetData(int index, s16 value) { mVars.WriteVar(index, value); }
+    // Wii: GetData, a variable by index through the out-of-line operator[].
+    s16 GetData(int index) const { return mVars[index]; }
     // The game has this inlined and as a function (0x254090, which UserCanPickup calls).
     bool IsPersonInline() const { return GetType() == 2; }
     bool IsPerson() const;
@@ -414,7 +490,21 @@ public:
     void SetLocation(const FTilePt &tile, int level);    // 0x212400
     void UpdateSimFlags();                               // 0x253DC0
     void SetWasPlacedByPlayer(bool placed);               // 0x253C98
-    int CanPlaceSingleTile(const FTilePt &tile, int a, cXObject *object, int b); // 0x253958
+    int CanPlaceSingleTile(const FTilePt &tile, int level, cXObject *object, int slot); // 0x253958
+    // CanPlaceSingleTile's body: UserCanPlace has it inlined while CanPlace calls the
+    // function. Defined in cXObject.cpp.
+    inline int CanPlaceSingleTileInline(const FTilePt &tile, int level, cXObject *object, int slot);
+    // Wii: TestPlace, the placement check behind CanPlace and UserCanPlace.
+    int TestPlace(PlacementSpec *spec); // 0x2104C8
+    int GetTileWidth();                 // 0x214258
+    void UpdateWallAdjacency();         // 0x214098
+    void UpdateChairFacing();           // 0x211978
+    // Wii keeps this as a function; Turn inlines both calls. Defined in cXObject.cpp.
+    static inline void UpdateChairFacing(ObjectModule *module, int x, int y, int level);
+    void CalcRoomScoreImpact();         // 0x21ADA0
+    // Wii: sXDirTable and sYDirTable, a step in each of the eight directions, north first.
+    static int sXDirTable[8]; // 0x4927C8  0, 1, 1, 1, 0, -1, -1, -1
+    static int sYDirTable[8]; // 0x4927F0  -1, -1, 0, 1, 1, 1, 0, -1
 
     // Reads and writes one operand of an instruction: bhav.md lists the scopes. InterpValue
     // returns 1, or -1 once it has stopped the tree with an error.

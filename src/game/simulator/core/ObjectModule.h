@@ -4,6 +4,7 @@
 #include "common/eastl.h"
 #include "common/types.h"
 
+class CTilePt;
 class cXObject;
 class cXPerson;
 class RoutingSlot;
@@ -33,6 +34,9 @@ public:
     cXObject *mSpecialObjects[0x10]; // 0x2098  numbered from 0x4000
 
     cXObject *GetObjectFromID(int id);
+    // The object ID on a tile, 0 off the 64 by 64 grid. The game also inlines it (the copy in
+    // cXObjectPrims.cpp); Turn calls this one.
+    s16 GetTileObjectID(const CTilePt &tile); // 0x255790
     // Wii: SimFlag. Only the value cXObject::Error passes is known; the name is ours.
     enum SimFlag { kSimFlagError = 4 };
     void SetSimFlag(int id, SimFlag flag, bool set); // 0x255688
