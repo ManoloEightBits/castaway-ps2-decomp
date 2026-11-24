@@ -624,6 +624,78 @@ u8 SimBodyPart::GetDegradationModelCodeIndex() const
     return modelCodeIndex;
 }
 
+// Fills `indexes` with every clothing set the Sim may wear for this body part (the nude set
+// first when the part has one, then either every unlocked non-generic set in the geometry
+// table or the Sim's chooseable items from the family inventory) and returns how many were
+// added.
+int SimBodyPart::GetValidClothingSetIndexes(
+    eastl::vector<Sim::ClothingSetIndexInfo, eastl::allocator> &indexes)
+{
+    int count = 0;
+    bool flag = GetCharacterFlag(0);
+    bool useArchetype = CasUtils::UseArchetype();
+    SimBodyPart *temp = CreateInstance((Character::eBodyPart)GetType(), flag);
+    u8 total = GetNumPossibleClothingSets();
+    u8 nude = GetNudeClothingSetIndex(flag);
+    if (nude < total) {
+        temp->SetClothingSetIndex(nude);
+        temp->SwitchToFirstAvailableDegradationStage();
+        Sim::ClothingSetIndexInfo info;
+        info.clothingSetIndex = nude;
+        info.itemID = 0;
+        info.flags = CasUtils::CalculateClothingSetIndexInfoFlags((Character::eBodyPart)temp->GetType(), flag,
+                                                                  info.clothingSetIndex, 0);
+        info.iconTextureID = CasUtils::GetNoneIconTextureID();
+        indexes.push_back(info);
+        count++;
+    }
+    if (useArchetype || _globals.field_0x410 != 0) {
+        for (u8 i = 0; i < total; i++) {
+            Sim::BodyPartGeometryTSC6 *set = &(*geometryVector)[i];
+            if (i != nude && strncmp("generic", set->name, 10) != 0
+                && ((set->flags & 1) != 0 || _globals.field_0x410 != 0)) {
+                temp->SetClothingSetIndex(i);
+                temp->SwitchToFirstAvailableDegradationStage();
+                Sim::ClothingSetIndexInfo info;
+                info.clothingSetIndex = i;
+                info.itemID = 0;
+                info.flags = 1;
+                info.iconTextureID = temp->GetIconTextureID();
+                indexes.push_back(info);
+                count++;
+            }
+        }
+    } else {
+        s16 neighborID = CasUtils::GetCASNeighborID();
+        // BUG: the two early returns below leak `temp`.
+        if (neighborID <= 0)
+            return 0;
+        InventoryItems *inventory = InventoryItems::GetInventoryByNeighborID(neighborID);
+        if (inventory == 0) {
+            inventory = InventoryItems::GetInitialFamilyInventory();
+            if (inventory == 0)
+                return 0;
+        }
+        eastl::vector<ClothingItem *, eastl::allocator> items;
+        inventory->GetChooseableClothingItems(items, (Character::eBodyPart)GetType(), flag, neighborID);
+        for (ClothingItem **it = items.begin(); it != items.end(); ++it) {
+            ClothingItem *item = *it;
+            Sim::ClothingSetIndexInfo info;
+            info.clothingSetIndex = item->GetClothingSetIndex();
+            info.itemID = item->GetInstanceID();
+            info.flags = CasUtils::CalculateClothingSetIndexInfoFlags((Character::eBodyPart)temp->GetType(),
+                                                                      flag, info.clothingSetIndex, item);
+            temp->CopyFromClothingItem(item);
+            info.iconTextureID = temp->GetIconTextureID();
+            indexes.push_back(info);
+            count++;
+        }
+    }
+    if (temp != 0)
+        delete temp;
+    return count;
+}
+
 // 1-based position of the worn clothing set in the UI list (0 when the part is the nude set
 // or not in the list). Archetype modes and the unlock flag walk the geometry table directly,
 // skipping the nude set, "generic" sets and locked sets; otherwise it walks the Sim's

@@ -16,17 +16,23 @@ class ClothingItem;
 class ReconBuffer;
 class SimModelTSC6;
 
+namespace Character {
+enum eSpecies { SPECIES_0, SPECIES_1 };
+enum eBodyPart { BODY_PART_FIRST = 0x1a, BODY_PART_COUNT = 15 };
+}
+
 
 
 namespace Sim {
 
-// One entry of the list GetValidClothingSetIndexes fills. Eight bytes; SetToRandom reads
-// the clothing set index at +0x6.
+// One entry of the list GetValidClothingSetIndexes fills.
 struct ClothingSetIndexInfo {
-    u32 field_0x0;       // 0x00
-    s16 field_0x4;       // 0x04
+    u32 iconTextureID;   // 0x00
+    s16 itemID;          // 0x04
     u8 clothingSetIndex; // 0x06
-    u8 field_0x7;        // 0x07
+    u8 flags;            // 0x07
+
+    ClothingSetIndexInfo() : iconTextureID(0), itemID(0), clothingSetIndex(0), flags(0) {}
 };
 STATIC_ASSERT(ClothingSetIndexInfo_size, sizeof(ClothingSetIndexInfo) == 0x8);
 
@@ -155,7 +161,7 @@ public:
     virtual void CreateIcon(SimModelTSC6 *model, EVec3 *cameraPos, EVec3 *cameraTarget, f32 a, u32 b,
                             u32 c, int d, int e, int f, bool g);
     virtual void GetRequiredDyesForTextureVariation(u8 textureIndex, s16 *dyes);
-    virtual bool GetValidClothingSetIndexes(
+    virtual int GetValidClothingSetIndexes(
         eastl::vector<Sim::ClothingSetIndexInfo, eastl::allocator> &indexes);
     virtual u8 GetClothingSetUIIndex() const;
     virtual u8 GetDegradationModelCodeIndex() const;
@@ -171,6 +177,8 @@ public:
     BodyPartTypeInfo *GetBodyPartTypeInfo() const;
     const char *GetCharacterType() const;
     void Init(CasSimDescription *description);
+    static SimBodyPart *CreateInstance(Character::eBodyPart part, bool male);
+    void CopyFromClothingItem(ClothingItem *item);
     // Inlined wherever the degradation state is clamped. The name is ours.
     u8 NumDegradationStates() const
     {
