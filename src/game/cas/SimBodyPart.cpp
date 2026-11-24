@@ -624,6 +624,55 @@ u8 SimBodyPart::GetDegradationModelCodeIndex() const
     return modelCodeIndex;
 }
 
+// 1-based position of the worn clothing set in the UI list (0 when the part is the nude set
+// or not in the list). Archetype modes and the unlock flag walk the geometry table directly,
+// skipping the nude set, "generic" sets and locked sets; otherwise it walks the Sim's
+// chooseable clothing items from the family inventory.
+u8 SimBodyPart::GetClothingSetUIIndex() const
+{
+    bool flag = GetCharacterFlag(0);
+    bool useArchetype = CasUtils::UseArchetype();
+    u8 total = GetNumPossibleClothingSets();
+    u8 nude = GetNudeClothingSetIndex(flag);
+    if (clothingSetIndex == nude)
+        return 0;
+    if (useArchetype || _globals.field_0x410 != 0) {
+        int uiIndex = 1;
+        for (u8 i = 0; i < total; i++) {
+            Sim::BodyPartGeometryTSC6 *set = &(*geometryVector)[i];
+            if (i != nude && strncmp("generic", set->name, 10) != 0
+                && ((set->flags & 1) != 0 || _globals.field_0x410 != 0)) {
+                if (i == clothingSetIndex)
+                    return uiIndex;
+                uiIndex++;
+            }
+        }
+    } else {
+        s16 neighborID = CasUtils::GetCASNeighborID();
+        if (neighborID <= 0)
+            return 0;
+        InventoryItems *inventory = InventoryItems::GetInventoryByNeighborID(neighborID);
+        if (inventory == 0) {
+            inventory = InventoryItems::GetInitialFamilyInventory();
+            if (inventory == 0)
+                return 0;
+        }
+        eastl::vector<ClothingItem *, eastl::allocator> items;
+        inventory->GetChooseableClothingItems(items, (Character::eBodyPart)GetType(), flag, neighborID);
+        int uiIndex = 1;
+        s16 instanceID = 0;
+        if (clothingItem != 0)
+            instanceID = clothingItem->GetInstanceID();
+        for (ClothingItem **it = items.begin(); it != items.end(); ++it, ++uiIndex) {
+            ClothingItem *item = *it;
+            if ((instanceID > 0 && item->GetInstanceID() == instanceID)
+                || (instanceID == 0 && item->GetClothingSetIndex() == clothingSetIndex))
+                return uiIndex;
+        }
+    }
+    return 0;
+}
+
 Sim::BodyPartGeometryTSC6 *SimBodyPart::GetClothingSetData() const
 {
     return clothingSetData;

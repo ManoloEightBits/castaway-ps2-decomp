@@ -110,6 +110,15 @@ public:
         return use;
     }
 
+    // Also inlined on PS2.
+    static s16 GetCASNeighborID()
+    {
+        int id = 0;
+        if (_gd.field_0x4c != 0 || _gd.field_0x48 != 0)
+            id = UIDB::UIDBGetInt("CAS_neighborID");
+        return id;
+    }
+
     // Inlined into its callers, and also a function (0x143B90) for ClothingItem's inlines.
     static u8 GetBodyPartIndex(Character::eBodyPart part);
     static u8 GetBodyPartIndexInline(Character::eBodyPart part)
