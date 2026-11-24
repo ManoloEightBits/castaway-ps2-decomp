@@ -34,6 +34,21 @@ void SimBodyPart::CopyFrom(const SimBodyPart *other)
     UpdateRelatedData();
 }
 
+void SimBodyPart::CopyFromClothingItem(ClothingItem *item)
+{
+    if (item != 0) {
+        SetClothingSetIndex(item->GetClothingSetIndex());
+        styleIndex = item->field_0x15;
+        modelCodeIndex = CalculateModelCodeIndexFromStyleIndex(styleIndex);
+        modelIndex = CalculateModelIndexFromModelCodeIndexAndStyleIndex(modelCodeIndex, styleIndex);
+        textureIndex = item->field_0x16;
+        degradationState = item->field_0x17;
+        characterFlags.setFlag(0, item->IsMale());
+        Validate();
+        UpdateRelatedData();
+    }
+}
+
 bool SimBodyPart::IsValid(bool a, bool b)
 {
     bool valid = false;
