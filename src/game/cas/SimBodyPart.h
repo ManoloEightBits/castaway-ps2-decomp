@@ -20,12 +20,15 @@ class SimModelTSC6;
 
 namespace Sim {
 
-// One entry of the list GetValidClothingSetIndexes fills. Eight bytes; the fields are
-// not known yet.
+// One entry of the list GetValidClothingSetIndexes fills. Eight bytes; SetToRandom reads
+// the clothing set index at +0x6.
 struct ClothingSetIndexInfo {
-    u32 field_0x0; // 0x00
-    u32 field_0x4; // 0x04
+    u32 field_0x0;       // 0x00
+    s16 field_0x4;       // 0x04
+    u8 clothingSetIndex; // 0x06
+    u8 field_0x7;        // 0x07
 };
+STATIC_ASSERT(ClothingSetIndexInfo_size, sizeof(ClothingSetIndexInfo) == 0x8);
 
 // One clothing set of a body part. SimBodyPart::geometryVector holds these.
 struct BodyPartGeometryTSC6 {
@@ -131,7 +134,7 @@ public:
     virtual void SetToDefault(bool a);
     virtual u8 GetNudeClothingSetIndex(bool a) const;
     virtual void SetToNude(bool a);
-    virtual void SetToRandom(int seed);
+    virtual void SetToRandom(int chance);
     virtual u8 CalculateModelCodeIndexFromStyleIndex(u8 styleIndex) const;
     virtual u8 CalculateModelIndexFromModelCodeIndexAndStyleIndex(u8 modelCodeIndex, u8 styleIndex) const;
     virtual u8 CalculateModelCodeIndexFromModelIndex(u8 modelIndex) const;

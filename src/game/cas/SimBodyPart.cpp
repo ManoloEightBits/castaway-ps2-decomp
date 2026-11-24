@@ -360,6 +360,37 @@ void SimBodyPart::SetToNude(bool a)
     SwitchToFirstAvailableDegradationStage();
 }
 
+// A roll from 1 to 100 above `chance` strips the part to its nude set. Otherwise picks a
+// valid non-nude clothing set at random (or the default set when fewer than two sets are
+// valid) and a random texture variation when the set has more than one.
+void SimBodyPart::SetToRandom(int chance)
+{
+    if (rand() % 100 + 1 > chance) {
+        SetToNude(GetCharacterFlag(0));
+        return;
+    }
+    eastl::vector<Sim::ClothingSetIndexInfo, eastl::allocator> indexes;
+    GetValidClothingSetIndexes(indexes);
+    int count = indexes.size();
+    if (count < 2) {
+        SetToDefault(GetCharacterFlag(0));
+        return;
+    }
+    u8 nude = GetNudeClothingSetIndex(GetCharacterFlag(0));
+    bool done = false;
+    while (!done) {
+        int choice = rand() % count;
+        if (indexes[choice].clothingSetIndex != nude) {
+            done = true;
+            SetClothingSetIndex(indexes[choice].clothingSetIndex);
+            SwitchToFirstAvailableDegradationStage();
+            int variations = GetNumPossibleTextureVariations();
+            if (variations > 1)
+                TextureIndex() = rand() % variations;
+        }
+    }
+}
+
 u8 SimBodyPart::CalculateModelCodeIndexFromStyleIndex(u8 styleIndex) const
 {
     return 0;
